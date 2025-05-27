@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'login.dart';
 
 class SignupScreen extends StatelessWidget {
   final emailController = TextEditingController();
@@ -91,6 +92,18 @@ class SignupScreen extends StatelessWidget {
                     elevation: 5,
                   ),
                   child: Text('Sign Up'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => LoginScreen()),
+                    );
+                  },
+                  child: Text(
+                    'Already have an account? Log In',
+                    style: TextStyle(color: Colors.blue),
+                  ),
                 ),
               ],
             ),
