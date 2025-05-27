@@ -2,21 +2,24 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'splashScreen.dart' ;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
 
   //for firebase setup
   WidgetsFlutterBinding.ensureInitialized() ;
+  await dotenv.load(fileName: "assets/.env");
+
   if(kIsWeb){
     await Firebase.initializeApp(
         options: FirebaseOptions(
-          apiKey: "AIzaSyDwyFdz1dIB9D1bkWQ3n-gWFCmXoGt-5ew",
-          authDomain: "home-services-app-9287d.firebaseapp.com",
-          projectId: "home-services-app-9287d",
-          storageBucket: "home-services-app-9287d.firebasestorage.app",
-          messagingSenderId: "817094934165",
-          appId: "1:817094934165:web:963d021bb4926a7f26259c",
-          measurementId: "G-5CPXW3DMRN" ,
+          apiKey: dotenv.env['API_KEY']!,
+          authDomain: dotenv.env['AUTH_DOMAIN']!,
+          projectId: dotenv.env['PROJECT_ID']!,
+          storageBucket: dotenv.env['STORAGE_BUCKET']!,
+          messagingSenderId: dotenv.env['MESSAGING_SENDER_ID']!,
+          appId: dotenv.env['APP_ID']!,
+          measurementId: dotenv.env['MEASUREMENT_ID'],
         )
     ) ;
   }
