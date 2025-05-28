@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login.dart';
 
-class SignupScreen extends StatelessWidget {
+class SignupScreen extends StatefulWidget {
+  @override
+  _SignupScreenState createState() => _SignupScreenState();
+}
+
+class _SignupScreenState extends State<SignupScreen> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  String _selectedRole = 'Client'; // Default role
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +54,27 @@ class SignupScreen extends StatelessWidget {
                     ),
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedRole,
+                    items: ['Client', 'Professional']
+                        .map((role) => DropdownMenuItem(
+                      value: role,
+                      child: Text(role),
+                    ))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedRole = value!;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      border: UnderlineInputBorder(),
+                      labelText: 'Select Role',
+                    ),
+                  ),
+                ),
                 SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: () async {
@@ -56,6 +84,14 @@ class SignupScreen extends StatelessWidget {
                           .createUserWithEmailAndPassword(
                           email: emailController.text.trim(),
                           password: passwordController.text.trim());
+
+                      final uid = userCredential.user?.uid;
+                      if (uid != null) {
+                        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+                          'role': _selectedRole,
+                          'createdAt': FieldValue.serverTimestamp(),
+                        });
+                      }
 
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('User sign up successful!')),

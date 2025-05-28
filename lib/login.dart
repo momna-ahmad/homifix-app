@@ -1,7 +1,7 @@
-
 import 'package:flutter/material.dart';
 import 'package:home_services_app/services/auth_service.dart';
 import 'signupScreen.dart'; // Add your correct path
+import 'addServicesPage.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,6 +28,21 @@ class _LoginScreenState extends State<LoginScreen> {
         _userId = uid;
         _errorMessage = null;
       });
+
+      // Show success snackbar
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Login successful!'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => AddServicesPage(userId: uid!)),
+      );
+
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
