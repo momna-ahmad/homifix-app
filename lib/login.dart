@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:home_services_app/services/auth_service.dart';
 import 'signupScreen.dart'; // Add your correct path
 import 'addServicesPage.dart';
+import 'addOrderPage.dart';
+import 'professionalOrderPage.dart';
+import 'CustomerOrderPage.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,7 +43,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => AddServicesPage(userId: uid!)),
+         MaterialPageRoute(builder: (_) => AddServicesPage(userId: uid!)),
+        //MaterialPageRoute(builder: (_) => AddOrderPage(userId: uid!)),
+        //MaterialPageRoute(builder: (_) => ProfessionalOrdersPage(professionalId: uid!)),
+         // MaterialPageRoute(builder: (_) => CustomerOrdersPage(userId: uid!)),
+
+
+
       );
 
     } catch (e) {
@@ -205,6 +214,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(builder: (context) => SignupScreen()),
+
                                   );
                                 },
                                 child: Text(

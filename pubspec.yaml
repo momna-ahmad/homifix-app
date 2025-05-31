@@ -38,6 +38,7 @@ dependencies:
   flutter_dotenv: ^5.1.0
   firebase_auth: ^5.5.4
   cloud_firestore: ^5.6.0
+  intl: ^0.18.1
 
 dev_dependencies:
   flutter_test:
@@ -63,7 +64,7 @@ flutter:
   assets:
     - assets/.env
 
-  # To add assets to your application, add an assets section, like this:
+    # To add assets to your application, add an assets section, like this:
     - assets/loginImage.jpeg
 
 
