@@ -54,9 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
       } else if (role?.toLowerCase() == 'client') {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => CustomerOrdersPage(userId:uid),
-          ),
+          MaterialPageRoute(builder: (_) => CustomerOrdersPage(userId: uid)),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -74,6 +72,8 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.9),
                         borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
+                        boxShadow: const [
                           BoxShadow(
                             color: Colors.black26,
                             offset: Offset(0, 4),
@@ -160,6 +160,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 borderSide: BorderSide(color: darkBlue, width: 2),
                               ),
                             ),
+                            keyboardType: TextInputType.emailAddress,
                           ),
                           const SizedBox(height: 16),
                           TextField(
@@ -177,23 +178,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
-                          if (_userRole != null) ...[
-                            const SizedBox(height: 16),
-                            TextField(
-                              readOnly: true,
-                              controller: TextEditingController(text: _userRole),
-                              decoration: InputDecoration(
-                                labelText: 'Role',
-                                prefixIcon: Icon(Icons.person, color: darkBlue),
-                                filled: true,
-                                fillColor: Colors.white,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: darkBlue, width: 2),
-                                ),
-                              ),
-                            ),
-                          ],
                           const SizedBox(height: 24),
                           SizedBox(
                             width: double.infinity,
@@ -234,7 +218,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 onTap: () {
                                   Navigator.push(
                                     context,
-                                    MaterialPageRoute(builder: (context) => SignupScreen()),
+                                    MaterialPageRoute(
+                                      builder: (context) => SignupScreen(),
+                                    ),
                                   );
                                 },
                                 child: Text(
