@@ -88,7 +88,7 @@ class CustomerOrdersPage extends StatelessWidget {
                           Icon(Icons.category, color: theme.colorScheme.primary),
                           const SizedBox(width: 8),
                           Text(
-                            data['category'] ?? 'N/A',
+                            data['service'] ?? 'N/A',
                             style: theme.textTheme.titleMedium!.copyWith(
                               fontWeight: FontWeight.bold,
                             ),
@@ -171,7 +171,7 @@ class CustomerOrdersPage extends StatelessWidget {
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Offer: \$${offerPrice}'),
+                                    Text('Offer: \$$offerPrice'),
                                     Text('Message: $message'),
                                     Text('Applied at: $formattedTime'),
                                     if (orderIsAssigned && !isSelected)

@@ -29,4 +29,18 @@ class AuthService {
       throw 'Error fetching role: $e';
     }
   }
+
+  // ✅ Move this method INSIDE the AuthService class
+  Future<Map<String, dynamic>> getUserData(String uid) async {
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+      if (doc.exists) {
+        return doc.data()!;
+      } else {
+        throw 'User not found';
+      }
+    } catch (e) {
+      throw 'Error fetching user data: $e';
+    }
+  }
 }

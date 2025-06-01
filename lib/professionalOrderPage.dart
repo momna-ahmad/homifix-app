@@ -276,13 +276,13 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
                                 alignment: Alignment.centerRight,
                                 child: ElevatedButton(
                                   onPressed: () => _updateOrderStatus(orderId, 'in_progress'),
-                                  child: const Text('Start Service'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.purple,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
+                                  child: const Text('Start Service'),
                                 ),
                               ),
 
@@ -291,13 +291,13 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
                                 alignment: Alignment.centerRight,
                                 child: ElevatedButton(
                                   onPressed: () => _updateOrderStatus(orderId, 'completed'),
-                                  child: const Text('Complete Service'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.green,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
+                                  child: const Text('Complete Service'),
                                 ),
                               ),
 

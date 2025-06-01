@@ -76,7 +76,7 @@ class ProfilePage extends StatelessWidget {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Services Provided:',
+                        'Services Providing:',
                         style: theme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ),
