@@ -1,31 +1,31 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'splashScreen.dart' ;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import 'landingPage.dart';
+import 'splashScreen.dart';
 import 'login.dart';
 
 void main() async {
-
-  //for firebase setup
-  WidgetsFlutterBinding.ensureInitialized() ;
+  // Firebase setup
+  WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: "assets/.env");
 
-  if(kIsWeb){
+  if (kIsWeb) {
     await Firebase.initializeApp(
-        options: FirebaseOptions(
-          apiKey: dotenv.env['API_KEY']!,
-          authDomain: dotenv.env['AUTH_DOMAIN']!,
-          projectId: dotenv.env['PROJECT_ID']!,
-          storageBucket: dotenv.env['STORAGE_BUCKET']!,
-          messagingSenderId: dotenv.env['MESSAGING_SENDER_ID']!,
-          appId: dotenv.env['APP_ID']!,
-          measurementId: dotenv.env['MEASUREMENT_ID'],
-        )
-    ) ;
-  }
-  else{
-    await Firebase.initializeApp() ;
+      options: FirebaseOptions(
+        apiKey: dotenv.env['API_KEY']!,
+        authDomain: dotenv.env['AUTH_DOMAIN']!,
+        projectId: dotenv.env['PROJECT_ID']!,
+        storageBucket: dotenv.env['STORAGE_BUCKET']!,
+        messagingSenderId: dotenv.env['MESSAGING_SENDER_ID']!,
+        appId: dotenv.env['APP_ID']!,
+        measurementId: dotenv.env['MEASUREMENT_ID'],
+      ),
+    );
+  } else {
+    await Firebase.initializeApp();
   }
 
   runApp(const MyApp());
@@ -34,18 +34,17 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'HomiFix',
       theme: ThemeData(
-        primaryColor: Color(0xFF4A90E2),
-        scaffoldBackgroundColor: Color(0xFFF5F7FA),
+        primaryColor: const Color(0xFF4A90E2),
+        scaffoldBackgroundColor: const Color(0xFFF5F7FA),
         fontFamily: 'Roboto',
       ),
       debugShowCheckedModeBanner: false,
-      home: SplashScreen(),
+      home: const LandingPage(),
     );
   }
 }
