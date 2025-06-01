@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../login.dart';
 import '../signupScreen.dart';
+import '../profilePage.dart';
 
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
@@ -230,14 +231,27 @@ class _LandingPageState extends State<LandingPage> {
                     final service = filteredServices[index];
                     final serviceName = service['service'] ?? '';
 
+                    // Inside ListView.builder for services, change ListTile to:
                     return Card(
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: ListTile(
                         leading: const Icon(Icons.home_repair_service),
                         title: highlightText(serviceName, searchQuery),
                         subtitle: Text("Timing: ${service['timing']}"),
+                        onTap: () {
+                          final userId = service['userId']; // from the service document
+                          final serviceData = service.data() as Map<String, dynamic>;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProfilePage(userId: service['userId']),
+                            ),
+                          );
+                        },
+
                       ),
                     );
+
                   },
                 );
               },
