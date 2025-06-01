@@ -2,19 +2,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'customerOrderPage.dart';
 
 class AddOrderPage extends StatelessWidget {
   final String userId;
   const AddOrderPage({required this.userId, super.key});
 
-  void _showAddOrderModal(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _OrderForm(userId: userId),
-    );
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -37,24 +31,19 @@ class AddOrderPage extends StatelessWidget {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.lightBlue.shade700,
-        onPressed: () => _showAddOrderModal(context),
-        child: const Icon(Icons.add, size: 28),
-      ),
     );
   }
 }
 
-class _OrderForm extends StatefulWidget {
+class OrderForm extends StatefulWidget {
   final String userId;
-  const _OrderForm({required this.userId});
+  const OrderForm({required this.userId});
 
   @override
-  State<_OrderForm> createState() => _OrderFormState();
+  State<OrderForm> createState() => OrderFormState();
 }
 
-class _OrderFormState extends State<_OrderForm> with SingleTickerProviderStateMixin {
+class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixin {
   final _categoryController = TextEditingController();
   final _locationController = TextEditingController();
   final _serviceController = TextEditingController();
@@ -150,7 +139,12 @@ class _OrderFormState extends State<_OrderForm> with SingleTickerProviderStateMi
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    Navigator.pop(context);
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CustomerOrdersPage(userId: widget.userId),
+      ),
+    );
   }
 
   @override

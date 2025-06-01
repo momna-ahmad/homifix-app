@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:home_services_app/services/auth_service.dart';
-import 'signupScreen.dart'; // Add your correct path
+import 'signupScreen.dart';
 import 'addServicesPage.dart';
 import 'addOrderPage.dart';
 import 'professionalOrderPage.dart';
@@ -20,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String? _errorMessage;
   String? _userId;
+  String? _userRole;
 
   void _loginUser() async {
     try {
@@ -27,12 +28,15 @@ class _LoginScreenState extends State<LoginScreen> {
         _emailController.text,
         _passwordController.text,
       );
+
+      final role = await _authService.getUserRole(uid!);
+
       setState(() {
         _userId = uid;
+        _userRole = role;
         _errorMessage = null;
       });
 
-      // Show success snackbar
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Login successful!'),
@@ -41,45 +45,53 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
 
-      Navigator.pushReplacement(
-        context,
-         MaterialPageRoute(builder: (_) => AddServicesPage(userId: uid!)),
-        //MaterialPageRoute(builder: (_) => AddOrderPage(userId: uid!)),
-        //MaterialPageRoute(builder: (_) => ProfessionalOrdersPage(professionalId: uid!)),
-         // MaterialPageRoute(builder: (_) => CustomerOrdersPage(userId: uid!)),
-
-
-
-      );
-
+      // Redirect based on role
+      if (role?.toLowerCase() == 'professional') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => AddServicesPage(userId: uid)),
+        );
+      } else if (role?.toLowerCase() == 'client') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CustomerOrdersPage(userId:uid),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Unknown role: $role'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
         _userId = null;
+        _userRole = null;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    const Color darkBlue = Color(0xFF0D47A1); // Changed to dark blue
+    const Color darkBlue = Color(0xFF0D47A1);
 
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background Image
           Image.asset(
             'assets/loginImage.jpeg',
             fit: BoxFit.cover,
             height: double.infinity,
             width: double.infinity,
           ),
-          // Overlay
           Container(
             color: Colors.black.withOpacity(0.3),
           ),
-          // Login Form
           Center(
             child: SingleChildScrollView(
               child: Padding(
@@ -87,13 +99,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Top Image
                     Transform.translate(
-                      offset: const Offset(0, -1), // move up by 20 pixels
+                      offset: const Offset(0, -1),
                       child: Container(
                         height: 200,
                         width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 24),  // keep bottom margin
+                        margin: const EdgeInsets.only(bottom: 24),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20),
                           image: const DecorationImage(
@@ -103,7 +114,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    // Login Card
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
@@ -137,7 +147,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 24),
-                          // Email Field
                           TextField(
                             controller: _emailController,
                             decoration: InputDecoration(
@@ -153,7 +162,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          // Password Field
                           TextField(
                             controller: _passwordController,
                             obscureText: true,
@@ -169,8 +177,24 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
+                          if (_userRole != null) ...[
+                            const SizedBox(height: 16),
+                            TextField(
+                              readOnly: true,
+                              controller: TextEditingController(text: _userRole),
+                              decoration: InputDecoration(
+                                labelText: 'Role',
+                                prefixIcon: Icon(Icons.person, color: darkBlue),
+                                filled: true,
+                                fillColor: Colors.white,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: darkBlue, width: 2),
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 24),
-                          // Login Button
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
@@ -186,24 +210,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                 'Login',
                                 style: TextStyle(
                                   fontSize: 18,
-                                  color: Colors.white, // Add this line
+                                  color: Colors.white,
                                 ),
                               ),
-
                             ),
                           ),
                           const SizedBox(height: 12),
-                          // Forgot Password
                           TextButton(
                             onPressed: () {
-                              // Add navigation to Forgot Password screen here
+                              // Forgot Password Navigation
                             },
                             child: Text(
                               'Forgot your password?',
                               style: TextStyle(color: darkBlue),
                             ),
                           ),
-                          // Sign Up Link
                           const SizedBox(height: 12),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -214,7 +235,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(builder: (context) => SignupScreen()),
-
                                   );
                                 },
                                 child: Text(
@@ -227,7 +247,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ],
                           ),
-                          // Error or Success Message
                           if (_errorMessage != null)
                             Padding(
                               padding: const EdgeInsets.only(top: 12.0),

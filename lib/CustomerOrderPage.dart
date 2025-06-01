@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'addOrderPage.dart';
+
 
 class CustomerOrdersPage extends StatelessWidget {
   final String userId;
   const CustomerOrdersPage({required this.userId, super.key});
-
+  void _showAddOrderModal(BuildContext context, String userId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => OrderForm(userId: userId),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -207,6 +216,11 @@ class CustomerOrdersPage extends StatelessWidget {
             },
           );
         },
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.lightBlue.shade700,
+        onPressed: () => _showAddOrderModal(context, userId),
+        child: const Icon(Icons.add, size: 28),
       ),
     );
   }
