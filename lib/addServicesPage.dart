@@ -1,4 +1,3 @@
-// AddServicesPage.dart
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -14,6 +13,47 @@ class AddServicesPage extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _ServiceForm(userId: userId),
+    );
+  }
+
+  void _showEditServiceModal(BuildContext context, DocumentSnapshot service) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ServiceForm(
+        userId: userId,
+        serviceToEdit: service,
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, String serviceId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Delete'),
+        content: const Text('Are you sure you want to delete this service?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await FirebaseFirestore.instance
+                  .collection('services')
+                  .doc(serviceId)
+                  .delete();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Service deleted')),
+              );
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -42,7 +82,6 @@ class AddServicesPage extends StatelessWidget {
             itemBuilder: (context, index) {
               final service = services[index];
               final category = service['category'] ?? 'No Category';
-
               final description = service['service'] ?? 'No Description';
               final timing = service['timing'] ?? 'No Timing';
 
@@ -53,12 +92,29 @@ class AddServicesPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: ListTile(
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  leading:
-                  const Icon(Icons.home_repair_service, color: Colors.blue),
-                  title:
-                  Text(category, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  title: Row(
+                    children: [
+                      const Icon(Icons.home_repair_service, color: Colors.blue),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          category,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.edit, size: 18),
+                        label: const Text('Edit'),
+                        onPressed: () => _showEditServiceModal(context, service),
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                        label: const Text('Delete', style: TextStyle(color: Colors.red)),
+                        onPressed: () => _confirmDelete(context, service.id),
+                      ),
+                    ],
+                  ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -84,7 +140,9 @@ class AddServicesPage extends StatelessWidget {
 
 class _ServiceForm extends StatefulWidget {
   final String userId;
-  const _ServiceForm({required this.userId});
+  final DocumentSnapshot? serviceToEdit;
+
+  const _ServiceForm({required this.userId, this.serviceToEdit});
 
   @override
   State<_ServiceForm> createState() => _ServiceFormState();
@@ -95,8 +153,18 @@ class _ServiceFormState extends State<_ServiceForm> {
   String? _selectedSubcategory;
   final TextEditingController _customSubcategoryController = TextEditingController();
   final TextEditingController _timingController = TextEditingController();
-
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.serviceToEdit != null) {
+      final data = widget.serviceToEdit!.data() as Map<String, dynamic>;
+      _selectedCategory = data['category'];
+      _selectedSubcategory = data['service'];
+      _timingController.text = data['timing'] ?? '';
+    }
+  }
 
   void _submitService() async {
     if (_selectedCategory == null) {
@@ -114,17 +182,24 @@ class _ServiceFormState extends State<_ServiceForm> {
 
     setState(() => _isSubmitting = true);
 
-    await FirebaseFirestore.instance.collection('services').add({
+    final data = {
       'userId': widget.userId,
-      'category': _selectedCategory ?? 'Other',
+      'category': _selectedCategory!,
       'service': _selectedSubcategory!.trim(),
       'timing': _timingController.text.trim(),
       'createdAt': FieldValue.serverTimestamp(),
-    });
+    };
 
-    if (mounted) {
-      Navigator.pop(context);
+    if (widget.serviceToEdit != null) {
+      await FirebaseFirestore.instance
+          .collection('services')
+          .doc(widget.serviceToEdit!.id)
+          .update(data);
+    } else {
+      await FirebaseFirestore.instance.collection('services').add(data);
     }
+
+    if (mounted) Navigator.pop(context);
   }
 
   @override
@@ -172,7 +247,7 @@ class _ServiceFormState extends State<_ServiceForm> {
                     Icon(Icons.build, color: Colors.blue),
                     SizedBox(width: 8),
                     Text(
-                      "Add New Service",
+                      "Add/Edit Service",
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -201,8 +276,8 @@ class _ServiceFormState extends State<_ServiceForm> {
                   },
                 ),
                 const SizedBox(height: 16),
-
-                if (_selectedCategory != null && subcategories[_selectedCategory!]!.isNotEmpty)
+                if (_selectedCategory != null &&
+                    subcategories[_selectedCategory!]!.isNotEmpty)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -263,7 +338,6 @@ class _ServiceFormState extends State<_ServiceForm> {
                       ),
                     ],
                   ),
-
                 const SizedBox(height: 16),
                 TextField(
                   controller: _timingController,
@@ -274,7 +348,6 @@ class _ServiceFormState extends State<_ServiceForm> {
                   ),
                 ),
                 const SizedBox(height: 24),
-
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -301,4 +374,3 @@ class _ServiceFormState extends State<_ServiceForm> {
     );
   }
 }
-
