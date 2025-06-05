@@ -1,6 +1,8 @@
+// AddServicesPage.dart
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../shared/categories.dart';
 
 class AddServicesPage extends StatelessWidget {
   final String userId;
@@ -33,7 +35,6 @@ class AddServicesPage extends StatelessWidget {
             return const Center(child: Text('No services added yet.'));
           }
 
-          print(snapshot.data) ;
           final services = snapshot.data!.docs;
 
           return ListView.builder(
@@ -41,6 +42,7 @@ class AddServicesPage extends StatelessWidget {
             itemBuilder: (context, index) {
               final service = services[index];
               final category = service['category'] ?? 'No Category';
+
               final description = service['service'] ?? 'No Description';
               final timing = service['timing'] ?? 'No Timing';
 
@@ -51,9 +53,12 @@ class AddServicesPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  leading: const Icon(Icons.home_repair_service, color: Colors.blue),
-                  title: Text(category, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  leading:
+                  const Icon(Icons.home_repair_service, color: Colors.blue),
+                  title:
+                  Text(category, style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -77,8 +82,6 @@ class AddServicesPage extends StatelessWidget {
   }
 }
 
-
-
 class _ServiceForm extends StatefulWidget {
   final String userId;
   const _ServiceForm({required this.userId});
@@ -88,37 +91,57 @@ class _ServiceForm extends StatefulWidget {
 }
 
 class _ServiceFormState extends State<_ServiceForm> {
-  final _categoryController = TextEditingController();
-  final _serviceController = TextEditingController();
-  final _timingController = TextEditingController();
+  String? _selectedCategory;
+  String? _selectedSubcategory;
+  final TextEditingController _customSubcategoryController = TextEditingController();
+  final TextEditingController _timingController = TextEditingController();
 
   bool _isSubmitting = false;
 
   void _submitService() async {
+    if (_selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a category')),
+      );
+      return;
+    }
+    if (_selectedSubcategory == null || _selectedSubcategory!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select or enter a subcategory')),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     await FirebaseFirestore.instance.collection('services').add({
       'userId': widget.userId,
-      'category': _categoryController.text.trim(),
-      'service': _serviceController.text.trim(),
+      'category': _selectedCategory ?? 'Other',
+      'service': _selectedSubcategory!.trim(),
       'timing': _timingController.text.trim(),
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    Navigator.pop(context); // Close modal
+    if (mounted) {
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  void dispose() {
+    _customSubcategoryController.dispose();
+    _timingController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Background blur
         BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
           child: Container(color: Colors.black.withOpacity(0.3)),
         ),
-
-        // Modal Form
         DraggableScrollableSheet(
           initialChildSize: 0.75,
           minChildSize: 0.6,
@@ -132,7 +155,6 @@ class _ServiceFormState extends State<_ServiceForm> {
             child: ListView(
               controller: controller,
               children: [
-                // Drag indicator
                 Center(
                   child: Container(
                     width: 40,
@@ -144,7 +166,6 @@ class _ServiceFormState extends State<_ServiceForm> {
                     ),
                   ),
                 ),
-                // Title and icon
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: const [
@@ -161,45 +182,109 @@ class _ServiceFormState extends State<_ServiceForm> {
                   ],
                 ),
                 const SizedBox(height: 24),
-
-                // Form fields
-                TextField(
-                  controller: _categoryController,
+                DropdownButtonFormField<String>(
                   decoration: InputDecoration(
                     labelText: 'Category',
-                    prefixIcon: Icon(Icons.category),
+                    prefixIcon: const Icon(Icons.category),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   ),
+                  items: categories
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
+                  value: _selectedCategory,
+                  onChanged: (val) {
+                    setState(() {
+                      _selectedCategory = val;
+                      _selectedSubcategory = null;
+                      _customSubcategoryController.clear();
+                    });
+                  },
                 ),
                 const SizedBox(height: 16),
 
-                TextField(
-                  controller: _serviceController,
-                  decoration: InputDecoration(
-                    labelText: 'Service Description',
-                    prefixIcon: Icon(Icons.description),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                if (_selectedCategory != null && subcategories[_selectedCategory!]!.isNotEmpty)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Select Subcategory:',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8.0,
+                        children: subcategories[_selectedCategory!]!.map((subcat) {
+                          final isSelected = _selectedSubcategory == subcat;
+                          final isDisabled = _customSubcategoryController.text.trim().isNotEmpty;
+                          return ChoiceChip(
+                            label: Text(subcat),
+                            selected: isSelected,
+                            onSelected: isDisabled
+                                ? null
+                                : (selected) {
+                              setState(() {
+                                _selectedSubcategory = selected ? subcat : null;
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _customSubcategoryController,
+                        decoration: InputDecoration(
+                          labelText: 'Or enter custom subcategory',
+                          prefixIcon: const Icon(Icons.add),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.check),
+                            onPressed: () {
+                              final text = _customSubcategoryController.text.trim();
+                              if (text.isNotEmpty) {
+                                setState(() {
+                                  _selectedSubcategory = text;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        onChanged: (val) {
+                          final text = val.trim();
+                          if (text.isNotEmpty) {
+                            setState(() {
+                              _selectedSubcategory = text;
+                            });
+                          } else {
+                            setState(() {
+                              _selectedSubcategory = null;
+                            });
+                          }
+                        },
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 16),
 
+                const SizedBox(height: 16),
                 TextField(
                   controller: _timingController,
                   decoration: InputDecoration(
                     labelText: 'Timing (e.g., 10am - 2pm)',
-                    prefixIcon: Icon(Icons.access_time),
+                    prefixIcon: const Icon(Icons.access_time),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
                 const SizedBox(height: 24),
 
-                // Submit Button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.check),
                     label: _isSubmitting
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
                         : const Text('Submit'),
                     onPressed: _isSubmitting ? null : _submitService,
                     style: ElevatedButton.styleFrom(
@@ -216,3 +301,4 @@ class _ServiceFormState extends State<_ServiceForm> {
     );
   }
 }
+
