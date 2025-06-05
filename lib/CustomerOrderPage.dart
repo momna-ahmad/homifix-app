@@ -112,7 +112,13 @@ class CustomerOrdersPage extends StatelessWidget {
 
                       // Order details with colorful emojis
                       _buildEmojiInfoRow('📂', 'Category:', data['category']),
-                      _buildEmojiInfoRow('📍', 'Location:', data['location']),
+                      _buildEmojiInfoRow(
+                        '📍',
+                        'Location:',
+                        (data['location'] != null && data['location'] is Map<String, dynamic>)
+                            ? data['location']['address'] ?? 'N/A'
+                            : 'N/A',
+                      ),
                       _buildEmojiInfoRow('💰', 'Offered Price:', '\$${data['priceOffer']}'),
                       _buildEmojiInfoRow('📅', 'Date:', data['serviceDate']),
                       _buildEmojiInfoRow('⏰', 'Time:', data['serviceTime']),

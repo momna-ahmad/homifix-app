@@ -1,8 +1,112 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'customerOrderPage.dart';
+import 'package:flutter_nominatim/flutter_nominatim.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_nominatim/flutter_nominatim.dart' as nominatim;
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
+
+
+class LocationAutocompleteField extends StatefulWidget {
+  final void Function(gmaps.LatLng, String) onPlaceSelected;
+  const LocationAutocompleteField({required this.onPlaceSelected, super.key});
+
+  @override
+  _LocationAutocompleteFieldState createState() => _LocationAutocompleteFieldState();
+}
+
+class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
+  final TextEditingController _controller = TextEditingController();
+  List<Place> _suggestions = [];
+  bool _isLoading = false;
+
+  // Called when user types
+  void _onTextChanged(String input) async {
+    if (input.length < 3) {
+      setState(() {
+        _suggestions = [];
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final results = await Nominatim.instance.search(input);
+      setState(() {
+        _suggestions = results;
+      });
+    } catch (e) {
+      print('Nominatim search error: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _onSuggestionTap(Place place) {
+    final lat = place.latitude;
+    final lon = place.longitude;
+    final latLng = gmaps.LatLng(lat, lon);
+
+    // Update text field
+    _controller.text = place.displayName ?? '';
+
+    // Clear suggestions
+    setState(() {
+      _suggestions = [];
+    });
+
+    // Notify parent widget of selection
+    widget.onPlaceSelected(latLng, place.displayName ?? '');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        TextField(
+          controller: _controller,
+          decoration: InputDecoration(
+            labelText: 'Location',
+            suffixIcon: _isLoading ? const CircularProgressIndicator(strokeWidth: 2) : null,
+          ),
+          onChanged: _onTextChanged,
+        ),
+        if (_suggestions.isNotEmpty)
+          Container(
+            constraints: BoxConstraints(maxHeight: 200),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 5)],
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _suggestions.length,
+              itemBuilder: (context, index) {
+                final place = _suggestions[index];
+                return ListTile(
+                  title: Text(place.displayName ?? 'Unknown'),
+                  onTap: () => _onSuggestionTap(place),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+
 
 class AddOrderPage extends StatelessWidget {
   final String userId;
@@ -51,6 +155,8 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   bool _isSubmitting = false;
+  gmaps.LatLng? _selectedLatLng;
+  String _selectedAddress = '';
 
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
@@ -109,7 +215,7 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
 
   void _submitOrder() async {
     if (_categoryController.text.trim().isEmpty ||
-        _locationController.text.trim().isEmpty ||
+        _selectedAddress.isEmpty ||
         _serviceController.text.trim().isEmpty ||
         _priceController.text.trim().isEmpty ||
         _selectedDate == null ||
@@ -129,7 +235,12 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
       'customerId': widget.userId,
       'category': _categoryController.text.trim(),
       'service': _serviceController.text.trim(),
-      'location': _locationController.text.trim(),
+      'location': {
+        'lat': _selectedLatLng!.latitude,
+        'lng': _selectedLatLng!.longitude,
+        'address': _selectedAddress, // This is the place's display name
+      },
+
       'priceOffer': _priceController.text.trim(),
       'serviceDate': formattedDate,
       'serviceTime': formattedTime,
@@ -208,7 +319,18 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
                     const SizedBox(height: 16),
                     _buildColoredIconTextField(_serviceController, 'Service (e.g. AC Repair)', Icons.build_circle_outlined, Colors.orange.shade600),
                     const SizedBox(height: 16),
-                    _buildColoredIconTextField(_locationController, 'Location', Icons.location_on, Colors.redAccent.shade400),
+                    //_buildColoredIconTextField(_locationController, 'Location', Icons.location_on, Colors.redAccent.shade400),
+                    LocationAutocompleteField(
+                      onPlaceSelected: (latLng, address) {
+                        setState(() {
+                          _selectedLatLng = latLng;
+                          _selectedAddress = address;
+                        });
+                      },
+                    ),
+                    if (_selectedLatLng != null)
+                      Text('Selected location: $_selectedAddress (${_selectedLatLng!.latitude}, ${_selectedLatLng!.longitude})'),
+                    // Other form fields
                     const SizedBox(height: 20),
                     _buildDateTimeTile('Service Date', _selectedDate == null ? 'No date chosen' : DateFormat('EEE, MMM d, yyyy').format(_selectedDate!), Icons.calendar_today, Colors.lightBlue.shade600, () => _pickDate(context)),
                     const SizedBox(height: 10),
