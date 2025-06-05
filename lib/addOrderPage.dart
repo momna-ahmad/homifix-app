@@ -149,7 +149,6 @@ class OrderForm extends StatefulWidget {
 
 class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixin {
   final _categoryController = TextEditingController();
-  final _locationController = TextEditingController();
   final _serviceController = TextEditingController();
   final _priceController = TextEditingController();
   DateTime? _selectedDate;
@@ -181,7 +180,6 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
   @override
   void dispose() {
     _categoryController.dispose();
-    _locationController.dispose();
     _serviceController.dispose();
     _priceController.dispose();
     _animationController.dispose();
