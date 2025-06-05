@@ -1,5 +1,4 @@
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +8,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_nominatim/flutter_nominatim.dart' as nominatim;
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
+import '../shared/categories.dart'; // Import the new category structure
 
 
 class LocationAutocompleteField extends StatefulWidget {
@@ -158,6 +158,9 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
   gmaps.LatLng? _selectedLatLng;
   String _selectedAddress = '';
 
+  String? _selectedCategory;
+  String? _selectedService;
+
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
   late final Animation<Offset> _slideAnimation;
@@ -169,14 +172,9 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
       duration: const Duration(milliseconds: 400),
       vsync: this,
     );
-    _fadeAnimation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.2),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOut));
+    _fadeAnimation = CurvedAnimation(parent: _animationController, curve: Curves.easeInOut);
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOut));
     _animationController.forward();
   }
 
@@ -198,9 +196,7 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
       firstDate: now,
       lastDate: DateTime(now.year + 1),
     );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
   Future<void> _pickTime(BuildContext context) async {
@@ -208,9 +204,7 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
       context: context,
       initialTime: TimeOfDay.now(),
     );
-    if (picked != null) {
-      setState(() => _selectedTime = picked);
-    }
+    if (picked != null) setState(() => _selectedTime = picked);
   }
 
   void _submitOrder() async {
@@ -315,9 +309,81 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
                     const SizedBox(height: 24),
                     _buildColoredIconTextField(_priceController, 'Your Price Offer', Icons.attach_money, Colors.amber.shade700, TextInputType.number),
                     const SizedBox(height: 16),
-                    _buildColoredIconTextField(_categoryController, 'Category', Icons.category, Colors.deepPurple.shade400),
+
+                    // ✅ Updated Category Dropdown
+                    DropdownButtonFormField<String>(
+                      value: _selectedCategory,
+                      items: categories.map((category) {
+                        return DropdownMenuItem(
+                          value: category,
+                          child: Text(category),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedCategory = value;
+                          _selectedService = null;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Category',
+                        prefixIcon: Icon(Icons.category, color: Colors.deepPurple.shade400),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        filled: true,
+                        fillColor: Colors.lightBlue.shade50.withOpacity(0.6),
+                      ),
+                    ),
                     const SizedBox(height: 16),
-                    _buildColoredIconTextField(_serviceController, 'Service (e.g. AC Repair)', Icons.build_circle_outlined, Colors.orange.shade600),
+
+                    // ✅ Updated Service Text Field with suggestions
+                    if (_selectedCategory != null && subcategories[_selectedCategory!]!.isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Select Service (only one):',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: subcategories[_selectedCategory!]!.map((service) {
+                              final isSelected = _selectedService == service;
+                              final isDisabled = _selectedService != null &&
+                                  _selectedService!.isNotEmpty &&
+                                  !subcategories[_selectedCategory!]!.contains(_selectedService);
+                              return ChoiceChip(
+                                label: Text(service),
+                                selected: isSelected,
+                                onSelected: isDisabled
+                                    ? null
+                                    : (selected) {
+                                  setState(() {
+                                    _selectedService = selected ? service : null;
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            enabled: _selectedService == null ||
+                                !subcategories[_selectedCategory!]!.contains(_selectedService),
+                            decoration: InputDecoration(
+                              labelText: 'Or type custom service',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                              prefixIcon:
+                              Icon(Icons.edit_note, color: Colors.orange.shade600),
+                              filled: true,
+                              fillColor: Colors.lightBlue.shade50.withOpacity(0.6),
+                            ),
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedService = val.trim();
+                              });
+                            },
+                          ),
+                        ],
+                      ),
                     const SizedBox(height: 16),
                     //_buildColoredIconTextField(_locationController, 'Location', Icons.location_on, Colors.redAccent.shade400),
                     LocationAutocompleteField(
@@ -339,7 +405,7 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        icon: const Icon(Icons.check_circle_outline, size: 24),
+                        icon: const Icon(Icons.check_circle_outline),
                         label: _isSubmitting
                             ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                             : const Text('Submit Request'),

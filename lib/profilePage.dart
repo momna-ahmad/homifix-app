@@ -1,19 +1,38 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'editProfile.dart';
 
 class ProfilePage extends StatelessWidget {
   final String userId;
   const ProfilePage({super.key, required this.userId});
 
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final email = currentUser?.email;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Professional Profile'),
         backgroundColor: Colors.blue,
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => EditProfileDialog(userId: userId),
+              );
+            },
+            icon: const Icon(Icons.edit, color: Colors.white),
+            label: const Text('Edit', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
+
+
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
         builder: (context, userSnapshot) {
@@ -64,7 +83,7 @@ class ProfilePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      userData['email'] ?? 'No Email',
+                      FirebaseAuth.instance.currentUser?.email ?? 'No Email',
                       style: theme.bodyMedium?.copyWith(color: Colors.grey[700]),
                     ),
                     const SizedBox(height: 4),
@@ -112,12 +131,12 @@ class ProfilePage extends StatelessWidget {
                                   const SizedBox(height: 6),
                                   Text(
                                     'Category: ${service['category'] ?? 'N/A'}',
-                                    style: theme.bodySmall,
+                                     style: theme.bodySmall,
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     'Timing: ${service['timing'] ?? 'N/A'}',
-                                    style: theme.bodySmall,
+                                     style: theme.bodySmall,
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
