@@ -21,18 +21,20 @@ class ProfilePage extends StatelessWidget {
         title: const Text('Professional Profile'),
         backgroundColor: Colors.blue,
         actions: [
-          TextButton.icon(
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => EditProfileDialog(userId: userId),
-              );
-            },
-            icon: const Icon(Icons.edit, color: Colors.white),
-            label: const Text('Edit', style: TextStyle(color: Colors.white)),
-          ),
+          if (FirebaseAuth.instance.currentUser?.uid == userId)
+            TextButton.icon(
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => EditProfileDialog(userId: userId),
+                );
+              },
+              icon: const Icon(Icons.edit, color: Colors.white),
+              label: const Text('Edit', style: TextStyle(color: Colors.white)),
+            ),
         ],
       ),
+
 
 
       body: StreamBuilder<DocumentSnapshot>(
@@ -105,10 +107,11 @@ class ProfilePage extends StatelessWidget {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      FirebaseAuth.instance.currentUser?.email ?? 'No Email',
-                      style: theme.bodyMedium?.copyWith(color: Colors.grey[700]),
-                    ),
+                    if (FirebaseAuth.instance.currentUser?.uid == userId)
+                      Text(
+                        FirebaseAuth.instance.currentUser?.email ?? 'No Email',
+                        style: theme.bodyMedium?.copyWith(color: Colors.grey[700]),
+                      ),
                     const SizedBox(height: 4),
                     Text(
                       'Role: ${userData['role'] ?? 'N/A'}',
