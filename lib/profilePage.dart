@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'editProfile.dart';
+import 'package:photo_view/photo_view.dart';
+
 
 class ProfilePage extends StatelessWidget {
   final String userId;
@@ -44,6 +46,7 @@ class ProfilePage extends StatelessWidget {
           }
 
           final userData = userSnapshot.data!.data()! as Map<String, dynamic>;
+          print('User Firestore data: $userData');
 
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -65,16 +68,36 @@ class ProfilePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    CircleAvatar(
-                      radius: 60,
-                      backgroundColor: Colors.blue.shade100,
-                      child: Text(
-                        userData['name'] != null && userData['name'].isNotEmpty
-                            ? userData['name'][0].toUpperCase()
-                            : '?',
-                        style: theme.headlineLarge?.copyWith(color: Colors.blue),
+                    GestureDetector(
+                      onTap: () {
+                        if (userData['profileImage'] != null && userData['profileImage'].toString().isNotEmpty) {
+                          showDialog(
+                            context: context,
+                            builder: (_) => Dialog(
+                              backgroundColor: Colors.transparent,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: PhotoView(
+                                  imageProvider: NetworkImage(userData['profileImage']),
+                                  backgroundDecoration: const BoxDecoration(color: Colors.transparent),
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: CircleAvatar(
+                        radius: 40,
+                        backgroundColor: Colors.grey.shade300,
+                        backgroundImage: (userData['profileImage'] != null && userData['profileImage'].toString().isNotEmpty)
+                            ? NetworkImage(userData['profileImage']) as ImageProvider
+                            : null,
+                        child: (userData['profileImage'] == null || userData['profileImage'].toString().isEmpty)
+                            ? const Icon(Icons.person, size: 40)
+                            : null,
                       ),
                     ),
+
                     const SizedBox(height: 16),
                     Text(
                       userData['name'] ?? 'No Name',

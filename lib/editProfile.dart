@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'profilePictureUploader.dart'; // Ensure pickAndUploadImageToCloudinary() and pickedImage are defined here
+import 'package:firebase_auth/firebase_auth.dart';
 
 class EditProfileDialog extends StatefulWidget {
   final String userId;
@@ -12,8 +14,8 @@ class EditProfileDialog extends StatefulWidget {
 
 class _EditProfileDialogState extends State<EditProfileDialog> {
   final TextEditingController _nameController = TextEditingController();
-
   bool _loading = false;
+  String? imageUrl;
 
   @override
   void initState() {
@@ -24,30 +26,57 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
   void _loadUserData() async {
     final doc = await FirebaseFirestore.instance.collection('users').doc(widget.userId).get();
     final data = doc.data();
-    if (data != null && data.containsKey('name')) {
-      _nameController.text = data['name'];
+    if (data != null) {
+      _nameController.text = data['name'] ?? '';
+      imageUrl = data['profileImage'];
+      if (mounted) setState(() {}); // refresh UI safely
     }
   }
 
-  void _saveChanges() async {
+  Future<void> _uploadProfileImage() async {
     setState(() => _loading = true);
 
-    try {
-      await FirebaseFirestore.instance.collection('users').doc(widget.userId).update({
-        'name': _nameController.text.trim(),
-      });
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated successfully')),
-      );
-    } catch (e) {
-      print('Error updating profile: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to update profile')),
-      );
-    }
+    final uploadedUrl = await pickAndUploadImageToCloudinary();
+    print('Uploaded image URL: $uploadedUrl');
 
-    setState(() => _loading = false);
+    if (!mounted) return;
+    setState(() {
+      imageUrl = uploadedUrl;
+      _loading = false;
+    });
+  }
+
+  Future<void> _saveChanges() async {
+    setState(() => _loading = true);
+
+    // imageUrl already updated during image pick
+    await FirebaseFirestore.instance.collection('users').doc(widget.userId).update({
+      'name': _nameController.text.trim(),
+      'profileImage': imageUrl,
+    });
+
+    if (mounted) {
+      setState(() => _loading = false);
+      Navigator.of(context).pop();
+    }
+  }
+
+
+  Widget _buildAvatar() {
+    return GestureDetector(
+      onTap: _loading ? null : _uploadProfileImage,
+      child: CircleAvatar(
+        radius: 40,
+        backgroundImage: imageUrl != null ? NetworkImage(imageUrl!) : null,
+        child: imageUrl == null ? const Icon(Icons.camera_alt, size: 40) : null,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
   }
 
   @override
@@ -57,6 +86,8 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          _buildAvatar(),
+          const SizedBox(height: 16),
           TextField(
             controller: _nameController,
             decoration: const InputDecoration(labelText: 'Full Name'),
@@ -70,9 +101,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
         ),
         ElevatedButton(
           onPressed: _loading ? null : _saveChanges,
-          child: _loading
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Save'),
+          child: const Text('Save'),
         ),
       ],
     );
