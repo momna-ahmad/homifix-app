@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -239,15 +240,18 @@ class _LandingPageState extends State<LandingPage> {
                         title: highlightText(serviceName, searchQuery),
                         subtitle: Text("Timing: ${service['timing']}"),
                         onTap: () {
-                          final userId = service['userId']; // from the service document
-                          final serviceData = service.data() as Map<String, dynamic>;
+                          final userId = service['userId'];
+                          final currentUser = FirebaseAuth.instance.currentUser;
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ProfilePage(userId: service['userId']),
+                              builder: (_) => ProfilePage(
+                                userId: userId,
+                              ),
                             ),
                           );
                         },
+
 
                       ),
                     );
