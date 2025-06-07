@@ -3,13 +3,83 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'customerOrderPage.dart';
-import 'package:flutter_nominatim/flutter_nominatim.dart';
+//import 'package:flutter_nominatim/flutter_nominatim.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_nominatim/flutter_nominatim.dart' as nominatim;
+//import 'package:flutter_nominatim/flutter_nominatim.dart' as nominatim;
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import '../shared/categories.dart'; // Import the new category structure
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:async';
 
+
+
+class Place {
+  final double latitude;
+  final double longitude;
+  final String? displayName;
+
+  Place({
+    required this.latitude,
+    required this.longitude,
+    this.displayName,
+  });
+}
+
+
+Future<List<Place>> _searchWithLocationIQ(String input) async {
+  const apiKey = 'pk.c6205b1882bfb7c832c4fea13d2fc5b4';
+  final uri = Uri.parse('https://api.locationiq.com/v1/autocomplete?key=$apiKey&q=$input&limit=5&format=json');
+
+  final response = await http.get(uri);
+
+  if (response.statusCode == 200) {
+    final List data = json.decode(response.body);
+    return data.map((item) => Place(
+      latitude: double.parse(item['lat']),
+      longitude: double.parse(item['lon']),
+      displayName: item['display_name'],
+    )).toList();
+  } else {
+    throw Exception('LocationIQ error: ${response.statusCode}');
+  }
+}
+
+
+Widget _buildColoredIconTextField(TextEditingController? controller, String label, IconData icon, Color iconColor, ValueChanged<String>? onChanged,  [TextInputType? type]) {
+  return TextField(
+    controller: controller,
+    keyboardType: type ?? TextInputType.text,
+    onChanged: onChanged,
+    decoration: InputDecoration(
+      labelText: label,
+      prefixIcon: Container(
+        margin: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(
+            colors: [iconColor.withOpacity(0.7), iconColor],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(color: iconColor.withOpacity(0.5), blurRadius: 5, offset: const Offset(1, 2)),
+          ],
+        ),
+        child: Icon(icon, color: Colors.white),
+      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      filled: true,
+      fillColor: Colors.lightBlue.shade50.withOpacity(0.6),
+      labelStyle: TextStyle(color: Colors.lightBlue.shade800, fontWeight: FontWeight.w600),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.lightBlue.shade700, width: 2),
+      ),
+    ),
+  );
+}
 
 class LocationAutocompleteField extends StatefulWidget {
   final void Function(gmaps.LatLng, String) onPlaceSelected;
@@ -23,32 +93,30 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
   final TextEditingController _controller = TextEditingController();
   List<Place> _suggestions = [];
   bool _isLoading = false;
+  Timer? _debounce;
 
   // Called when user types
-  void _onTextChanged(String input) async {
-    if (input.length < 3) {
-      setState(() {
-        _suggestions = [];
-      });
-      return;
-    }
 
-    setState(() {
-      _isLoading = true;
+  void _onTextChanged(String input) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+
+    _debounce = Timer(const Duration(milliseconds: 500), () async {
+      if (input.length < 3) {
+        setState(() => _suggestions = []);
+        return;
+      }
+
+      setState(() => _isLoading = true);
+
+      try {
+        final results = await _searchWithLocationIQ(input);
+        setState(() => _suggestions = results);
+      } catch (e) {
+        print('location search error: $e');
+      } finally {
+        setState(() => _isLoading = false);
+      }
     });
-
-    try {
-      final results = await Nominatim.instance.search(input);
-      setState(() {
-        _suggestions = results;
-      });
-    } catch (e) {
-      print('Nominatim search error: $e');
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 
   void _onSuggestionTap(Place place) {
@@ -72,13 +140,12 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        TextField(
-          controller: _controller,
-          decoration: InputDecoration(
-            labelText: 'Location',
-            suffixIcon: _isLoading ? const CircularProgressIndicator(strokeWidth: 2) : null,
-          ),
-          onChanged: _onTextChanged,
+        _buildColoredIconTextField(
+          _controller,
+          'Location (e.g Wapda town, lahore, punjab, pakistan)',
+          Icons.location_on,
+           Colors.redAccent.shade400,
+           _onTextChanged,
         ),
         if (_suggestions.isNotEmpty)
           Container(
@@ -102,6 +169,7 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
             ),
           ),
       ],
+
     );
   }
 }
@@ -206,12 +274,13 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
   }
 
   void _submitOrder() async {
-    if (_categoryController.text.trim().isEmpty ||
+    if ( _selectedCategory == null ||
         _selectedAddress.isEmpty ||
-        _serviceController.text.trim().isEmpty ||
         _priceController.text.trim().isEmpty ||
         _selectedDate == null ||
         _selectedTime == null) {
+
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all fields')),
       );
@@ -225,7 +294,7 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
 
     await FirebaseFirestore.instance.collection('orders').add({
       'customerId': widget.userId,
-      'category': _categoryController.text.trim(),
+      'category': _selectedCategory,
       'service': _serviceController.text.trim(),
       'location': {
         'lat': _selectedLatLng!.latitude,
@@ -305,7 +374,7 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
-                    _buildColoredIconTextField(_priceController, 'Your Price Offer', Icons.attach_money, Colors.amber.shade700, TextInputType.number),
+                    _buildColoredIconTextField(_priceController, 'Your Price Offer', Icons.attach_money, Colors.amber.shade700, null , TextInputType.number),
                     const SizedBox(height: 16),
 
                     // ✅ Updated Category Dropdown
@@ -383,17 +452,16 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
                         ],
                       ),
                     const SizedBox(height: 16),
-                    //_buildColoredIconTextField(_locationController, 'Location', Icons.location_on, Colors.redAccent.shade400),
+
                     LocationAutocompleteField(
                       onPlaceSelected: (latLng, address) {
+                        print("Selected location: $latLng, $address");
                         setState(() {
                           _selectedLatLng = latLng;
                           _selectedAddress = address;
                         });
                       },
                     ),
-                    if (_selectedLatLng != null)
-                      Text('Selected location: $_selectedAddress (${_selectedLatLng!.latitude}, ${_selectedLatLng!.longitude})'),
                     // Other form fields
                     const SizedBox(height: 20),
                     _buildDateTimeTile('Service Date', _selectedDate == null ? 'No date chosen' : DateFormat('EEE, MMM d, yyyy').format(_selectedDate!), Icons.calendar_today, Colors.lightBlue.shade600, () => _pickDate(context)),
@@ -425,39 +493,6 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildColoredIconTextField(TextEditingController controller, String label, IconData icon, Color iconColor, [TextInputType? type]) {
-    return TextField(
-      controller: controller,
-      keyboardType: type ?? TextInputType.text,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Container(
-          margin: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              colors: [iconColor.withOpacity(0.7), iconColor],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(color: iconColor.withOpacity(0.5), blurRadius: 5, offset: const Offset(1, 2)),
-            ],
-          ),
-          child: Icon(icon, color: Colors.white),
-        ),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-        filled: true,
-        fillColor: Colors.lightBlue.shade50.withOpacity(0.6),
-        labelStyle: TextStyle(color: Colors.lightBlue.shade800, fontWeight: FontWeight.w600),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.lightBlue.shade700, width: 2),
-        ),
-      ),
     );
   }
 

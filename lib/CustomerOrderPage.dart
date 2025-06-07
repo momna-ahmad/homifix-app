@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'addOrderPage.dart';
+import 'orderApplications.dart';
 
 
 class CustomerOrdersPage extends StatelessWidget {
@@ -56,13 +57,20 @@ class CustomerOrdersPage extends StatelessWidget {
               final order = orders[index];
               final data = order.data()! as Map<String, dynamic>;
 
-              final applications =
-              (data['applications'] as List<dynamic>? ?? [])
-                  .cast<Map<String, dynamic>>();
+              final int applicationCount = (data['applications'] as List<dynamic>? ?? []).length;
               final selectedWorkerId = data['selectedWorkerId'] as String?;
               final orderIsAssigned = selectedWorkerId != null;
 
-              return AnimatedContainer(
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => OrderApplications(orderId: order.id),
+                    ),
+                  );
+                },
+                child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
                 margin: const EdgeInsets.symmetric(vertical: 8),
@@ -125,99 +133,13 @@ class CustomerOrdersPage extends StatelessWidget {
                       const Divider(height: 24, thickness: 1),
 
                       Text(
-                        'Applications:',
+                        'Applications: $applicationCount',
                         style: theme.textTheme.titleSmall!.copyWith(fontWeight: FontWeight.bold),
                       ),
-                      if (applications.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text('No applications yet.'),
-                        )
-                      else
-                        Column(
-                          children: applications.map((app) {
-                            final workerId = app['workerId'] as String? ?? 'Unknown';
-                            final workerName = app['workerName'] as String? ?? 'Unknown';
-                            final offerPrice = app['offerPrice']?.toString() ?? 'N/A';
-                            final message = app['message'] as String? ?? '';
-                            final timestampRaw = app['timestamp'];
-                            DateTime? timestamp;
-                            if (timestampRaw is Timestamp) {
-                              timestamp = timestampRaw.toDate();
-                            } else if (timestampRaw is String) {
-                              timestamp = DateTime.tryParse(timestampRaw);
-                            }
-                            final formattedTime = timestamp != null
-                                ? DateFormat('MMM dd, yyyy • HH:mm').format(timestamp)
-                                : 'Unknown';
-
-                            final isSelected = selectedWorkerId == workerId;
-
-                            return Card(
-                              margin: const EdgeInsets.symmetric(vertical: 6),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              color: isSelected
-                                  ? Colors.green.shade100
-                                  : orderIsAssigned
-                                  ? Colors.grey.shade200
-                                  : theme.cardColor,
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: theme.colorScheme.primaryContainer,
-                                  child: const Icon(Icons.person, color: Colors.white),
-                                ),
-                                title: Text(
-                                  workerName,
-                                  style: theme.textTheme.bodyLarge!.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Offer: \$$offerPrice'),
-                                    Text('Message: $message'),
-                                    Text('Applied at: $formattedTime'),
-                                    if (orderIsAssigned && !isSelected)
-                                      Text(
-                                        'Worker Booked',
-                                        style: TextStyle(
-                                          color: Colors.red.shade400,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                trailing: orderIsAssigned
-                                    ? (isSelected
-                                    ? const Icon(Icons.check_circle, color: Colors.green)
-                                    : null)
-                                    : Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.check, color: Colors.green),
-                                      tooltip: 'Accept',
-                                      onPressed: () => _acceptWorker(
-                                          context, order.id, workerId),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.close, color: Colors.red),
-                                      tooltip: 'Reject',
-                                      onPressed: () => _rejectWorker(
-                                          context, order.id, workerId),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
                     ],
                   ),
                 ),
+              ),
               );
             },
           );
