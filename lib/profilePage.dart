@@ -3,11 +3,24 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'editProfile.dart';
 import 'package:photo_view/photo_view.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
+import 'login.dart';
 
 class ProfilePage extends StatelessWidget {
   final String userId;
   const ProfilePage({super.key, required this.userId});
+
+  void logoutUser(BuildContext context) async {
+    await FirebaseAuth.instance.signOut(); // sign out from Firebase
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear(); // remove saved session
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+    );
+  }
 
 
   @override
@@ -21,7 +34,7 @@ class ProfilePage extends StatelessWidget {
         title: const Text('Professional Profile'),
         backgroundColor: Colors.blue,
         actions: [
-          if (FirebaseAuth.instance.currentUser?.uid == userId)
+          if (FirebaseAuth.instance.currentUser?.uid == userId) ...[
             TextButton.icon(
               onPressed: () {
                 showDialog(
@@ -32,6 +45,12 @@ class ProfilePage extends StatelessWidget {
               icon: const Icon(Icons.edit, color: Colors.white),
               label: const Text('Edit', style: TextStyle(color: Colors.white)),
             ),
+            IconButton(
+              icon: const Icon(Icons.logout),
+              tooltip: 'Logout',
+              onPressed: () => logoutUser(context),
+            ),
+          ],
         ],
       ),
 
@@ -117,6 +136,7 @@ class ProfilePage extends StatelessWidget {
                       'Role: ${userData['role'] ?? 'N/A'}',
                       style: theme.bodySmall?.copyWith(color: Colors.grey[700]),
                     ),
+                    if ((userData['role'] ?? '').toLowerCase() == 'professional') ...[
                     const Divider(height: 32, thickness: 1.5),
                     Align(
                       alignment: Alignment.centerLeft,
@@ -175,6 +195,7 @@ class ProfilePage extends StatelessWidget {
                           );
                         },
                       ),
+                    ],
                   ],
                 ),
               );

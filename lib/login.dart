@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:home_services_app/services/auth_service.dart';
 import 'signupScreen.dart';
-import 'addServicesPage.dart';
-import 'professionalOrderPage.dart';
 import 'CustomerOrderPage.dart';
 import 'homeNavPage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,6 +30,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final role = await _authService.getUserRole(uid!);
 
+      // Store user data in SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('uid', uid);
+      await prefs.setString('role', role ?? '');
+
       setState(() {
         _userId = uid;
         _userRole = role;
@@ -45,16 +49,16 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
 
-      // Redirect based on role
+      // Navigate based on role
       if (role?.toLowerCase() == 'professional') {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => HomeNavPage(userId: uid)),
+          MaterialPageRoute(builder: (_) => HomeNavPage(userId: uid,role:role!)),
         );
       } else if (role?.toLowerCase() == 'client') {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => CustomerOrdersPage(userId: uid)),
+          MaterialPageRoute(builder: (_) => HomeNavPage(userId: uid,role:role!)),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -72,6 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     }
   }
+
 
 
 

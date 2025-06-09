@@ -3,8 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../login.dart';
-import '../signupScreen.dart';
 import '../profilePage.dart';
 
 class LandingPage extends StatefulWidget {
@@ -43,7 +41,6 @@ class _LandingPageState extends State<LandingPage> {
     super.dispose();
   }
 
-  // Highlight matched text in search results
   RichText highlightText(String source, String query) {
     if (query.isEmpty) {
       return RichText(
@@ -83,28 +80,6 @@ class _LandingPageState extends State<LandingPage> {
           "Welcome to Home Services",
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LoginScreen())),
-            child: Row(
-              children: const [
-                Icon(Icons.login, color: Colors.white),
-                SizedBox(width: 5),
-                Text("Login", style: TextStyle(color: Colors.white)),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SignupScreen())),
-            child: Row(
-              children: const [
-                Icon(Icons.person_add, color: Colors.white),
-                SizedBox(width: 5),
-                Text("Signup", style: TextStyle(color: Colors.white)),
-              ],
-            ),
-          ),
-        ],
         backgroundColor: Colors.blue,
       ),
       body: Column(
@@ -171,13 +146,11 @@ class _LandingPageState extends State<LandingPage> {
                       child: ElevatedButton(
                         onPressed: () {
                           setState(() {
-                            // Toggle selected category or clear if already selected
                             if (selectedCategory == category) {
                               selectedCategory = null;
                             } else {
                               selectedCategory = category;
                             }
-                            // Clear search when changing category for clarity
                             _searchController.clear();
                             searchQuery = '';
                           });
@@ -210,7 +183,6 @@ class _LandingPageState extends State<LandingPage> {
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                 final services = snapshot.data!.docs;
 
-                // Filter client-side by search query
                 final filteredServices = services.where((service) {
                   final serviceName = (service['service'] ?? '').toString().toLowerCase();
                   return serviceName.contains(searchQuery);
@@ -232,7 +204,6 @@ class _LandingPageState extends State<LandingPage> {
                     final service = filteredServices[index];
                     final serviceName = service['service'] ?? '';
 
-                    // Inside ListView.builder for services, change ListTile to:
                     return Card(
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: ListTile(
@@ -241,21 +212,15 @@ class _LandingPageState extends State<LandingPage> {
                         subtitle: Text("Timing: ${service['timing']}"),
                         onTap: () {
                           final userId = service['userId'];
-                          final currentUser = FirebaseAuth.instance.currentUser;
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ProfilePage(
-                                userId: userId,
-                              ),
+                              builder: (_) => ProfilePage(userId: userId),
                             ),
                           );
                         },
-
-
                       ),
                     );
-
                   },
                 );
               },

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'signupScreen.dart'; // Make sure this file exists
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'login.dart';
+import 'homeNavPage.dart';
 
 class SplashScreen extends StatefulWidget {
   @override
@@ -11,34 +14,53 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
+    _checkLoginStatus();
+  }
 
-    Future.delayed(Duration(seconds: 3), () {
+  Future<void> _checkLoginStatus() async {
+    await Future.delayed(const Duration(seconds: 2)); // Splash delay
+
+    final user = FirebaseAuth.instance.currentUser;
+    final prefs = await SharedPreferences.getInstance();
+    final role = prefs.getString('role');
+
+    if (user != null && role != null) {
+      // User is logged in — go to home page
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => SignupScreen()),
-
+        MaterialPageRoute(
+          builder: (_) => HomeNavPage(userId: user.uid, role: role),
+        ),
       );
-    });
+    } else {
+      // Not logged in — go to login
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LoginScreen(),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFF5F7FA), // light grey-blue
+      backgroundColor: const Color(0xFFF5F7FA),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
+            const Text(
               'HomiFix',
               style: TextStyle(
                 fontSize: 40,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF4A90E2), // soft blue
+                color: Color(0xFF4A90E2),
                 letterSpacing: 1.5,
               ),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Text(
               'Helping Hands for Your Home',
               style: TextStyle(
@@ -46,9 +68,9 @@ class _SplashScreenState extends State<SplashScreen> {
                 color: Colors.grey[600],
               ),
             ),
-            SizedBox(height: 30),
-            CircularProgressIndicator(
-              color: Color(0xFF7ED6DF), // light teal
+            const SizedBox(height: 30),
+            const CircularProgressIndicator(
+              color: Color(0xFF7ED6DF),
               strokeWidth: 2,
             ),
           ],
