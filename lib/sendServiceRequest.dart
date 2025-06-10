@@ -4,8 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class RequestService {
   static Future<void> sendRequest({
     required BuildContext context,
-    required String professionalId,
-    required String orderId,
+    required String professionalId, // ID of the professional sending the request
+    required String orderId,        // ID of the order being requested
     required String price,
     required String message,
   }) async {
@@ -17,17 +17,50 @@ class RequestService {
     }
 
     try {
+      // --- Step 1: Check if the request has already been sent by this professional for this order ---
+      final professionalUserRef = FirebaseFirestore.instance.collection('users').doc(professionalId);
+      final professionalSnapshot = await professionalUserRef.get();
+
+      if (professionalSnapshot.exists) {
+        final professionalData = professionalSnapshot.data();
+        final List<dynamic> requestsSent = professionalData?['requestsSent'] ?? [];
+
+        if (requestsSent.contains(orderId)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ You have already sent a request for this order.'),
+              backgroundColor: Colors.orange, // Highlight warning
+            ),
+          );
+          return; // Stop execution if request already exists
+        }
+      } else {
+        // Handle case where professional user document doesn't exist (though it should for logged-in users)
+        print('Warning: Professional user document not found for ID: $professionalId');
+        // You might decide to return or proceed, but it's an unusual state.
+        // For robustness, we'll proceed as if they just haven't sent any requests yet.
+      }
+
+
+      // --- Step 2: If not already sent, proceed with sending the request ---
       final request = {
-        'professionalId' : professionalId,
+        'professionalId': professionalId,
         'price': price,
         'message': message,
-        'timestamp': DateTime.now().toIso8601String(),
+        'status': 'pending',
+        'timestamp': DateTime.now().toIso8601String(), // Use server timestamp for accuracy
       };
 
+      // Update the Order Document
       final orderRef = FirebaseFirestore.instance.collection('orders').doc(orderId);
-
       await orderRef.update({
         'applications': FieldValue.arrayUnion([request]),
+      });
+
+      // Update the Professional's User Document (add orderId to requestsSent)
+      // This update will only happen if the check above passed.
+      await professionalUserRef.update({
+        'requestsSent': FieldValue.arrayUnion([orderId]), // Add the orderId to the array
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -37,9 +70,11 @@ class RequestService {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error sending request: $e')),
       );
+      print('Error sending request: $e'); // For debugging
     }
   }
 }
+
 
 
 class SendRequestDialog extends StatefulWidget {

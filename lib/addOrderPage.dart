@@ -292,10 +292,11 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
     final formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate!);
     final formattedTime = _selectedTime!.format(context);
 
+
     await FirebaseFirestore.instance.collection('orders').add({
       'customerId': widget.userId,
       'category': _selectedCategory,
-      'service': _serviceController.text.trim(),
+      'service': _selectedService,
       'location': {
         'lat': _selectedLatLng!.latitude,
         'lng': _selectedLatLng!.longitude,
@@ -433,11 +434,23 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
                           ),
                           const SizedBox(height: 12),
                           TextField(
+                            controller: _serviceController,
                             enabled: _selectedService == null ||
                                 !subcategories[_selectedCategory!]!.contains(_selectedService),
                             decoration: InputDecoration(
                               labelText: 'Or type custom service',
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.check),
+                                onPressed: () {
+                                  final text = _serviceController.text.trim();
+                                  if (text.isNotEmpty) {
+                                    setState(() {
+                                      _selectedService = text;
+                                    });
+                                  }
+                                },
+                              ),
                               prefixIcon:
                               Icon(Icons.edit_note, color: Colors.orange.shade600),
                               filled: true,

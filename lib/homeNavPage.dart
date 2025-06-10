@@ -5,6 +5,7 @@ import 'professionalOrderPage.dart';
 import 'addServicesPage.dart';
 import 'profilePage.dart';
 import 'landingPage.dart';
+import 'package:home_services_app/professionalSchedule.dart' ;
 
 class HomeNavPage extends StatefulWidget {
   final String userId;
@@ -27,10 +28,9 @@ class _HomeNavPageState extends State<HomeNavPage> {
     super.initState();
     if (widget.role.toLowerCase() == 'professional') {
       _pages = [
-        LandingPage(),
         AddServicesPage(userId: widget.userId),
         ProfessionalOrdersPage(professionalId: widget.userId),
-        _buildHistoryPage(),
+        ProfessionalSchedule(userId: widget.userId),
         ProfilePage(userId: widget.userId),
       ];
     } else {
@@ -56,6 +56,7 @@ class _HomeNavPageState extends State<HomeNavPage> {
       child: Text("History Page", style: TextStyle(fontSize: 18)),
     );
   }
+
   Widget _buildCustomerOrdersPage() {
     return const Center(
       child: Text("Customer Orders Page", style: TextStyle(fontSize: 18)),
@@ -83,10 +84,9 @@ class _HomeNavPageState extends State<HomeNavPage> {
         type: BottomNavigationBarType.fixed,
         items: widget.role.toLowerCase() == 'professional'
             ? const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.home_repair_service), label: 'My Services'),
           BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Job Posts'),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
+          BottomNavigationBarItem(icon: Icon(Icons.schedule), label: 'Schedule'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'My Profile'),
         ]
             : const [

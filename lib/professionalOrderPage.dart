@@ -83,6 +83,7 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
             stream: FirebaseFirestore.instance
                 .collection('orders')
                 .where('category', whereIn: categories)
+                .where('status', isEqualTo: 'waiting')
                 .snapshots(),
             builder: (context, orderSnapshot) {
               if (!orderSnapshot.hasData) {
@@ -127,6 +128,7 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
                             ],
                           ),
                           const SizedBox(height: 12),
+                          Text("📍 service: ${data['service'] ?? 'N/A'}"),
                           Text("📍 Location: ${data['location']['address'] ?? 'N/A'}"),
                           Text("📅 Date: ${data['serviceDate'] ?? ''}"),
                           Text("⏰ Time: ${data['serviceTime'] ?? ''}"),

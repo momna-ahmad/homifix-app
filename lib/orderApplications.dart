@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:home_services_app/professionalProfile.dart';
+import 'professionalOrderPage.dart' ;
 
 class OrderApplications extends StatelessWidget{
   final String orderId;
@@ -8,6 +10,54 @@ class OrderApplications extends StatelessWidget{
   Future<DocumentSnapshot<Map<String,dynamic>>> _fetchOrder(){
     return FirebaseFirestore.instance.collection('orders').doc(orderId).get() ;
   }
+
+  void _acceptApplication(int index, String professionalId) async {
+    final orderDocRef = FirebaseFirestore.instance.collection('orders').doc(orderId);
+
+    // Step 1: Fetch the order document
+    DocumentSnapshot<Map<String, dynamic>> orderSnapshot = await orderDocRef.get();
+    if (!orderSnapshot.exists) return;
+
+    Map<String, dynamic> orderData = Map.from(orderSnapshot.data()!);
+    List<dynamic> applications = List.from(orderData['applications'] ?? []);
+
+    // Safety check
+    if (index < 0 || index >= applications.length) return;
+
+    // Step 2: Update application status
+    Map<String, dynamic> updatedApplication = Map.from(applications[index]);
+    updatedApplication['status'] = 'accepted';
+    applications[index] = updatedApplication;
+    orderData['status'] = 'assigned';
+
+    // Step 3: Update the 'applications' field in the order document
+    await orderDocRef.update({
+      'applications': applications,
+      'status': orderData['status']
+    });
+
+    // Step 4: Copy order data to the professional's 'orders' array
+    final professionalDocRef = FirebaseFirestore.instance.collection('users').doc(professionalId);
+
+    // Optional: Remove large or unnecessary fields before storing in the user's document
+    Map<String, dynamic> orderDataForProfessional = {
+      'location' : orderData['location'] ,
+      'date' : orderData['serviceDate'] ,
+      'time' : orderData['serviceTime'] ,
+      'price' : applications[index]['price'] ,
+      'service' : orderData['service'] ,
+      'completionStatus' : 'pending'
+    };
+    orderDataForProfessional['orderId'] = orderId; // include the order ID for reference
+
+    await professionalDocRef.update({
+      'orders': FieldValue.arrayUnion([orderDataForProfessional])
+    });
+
+    print('Accepted application and updated professional orders.');
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +122,33 @@ class OrderApplications extends StatelessWidget{
                         const SizedBox(height: 4),
                         Text('💬 Message: ${application['message'] ?? 'No message'}'),
                         Text('💰 Price: Rs. ${application['price'] ?? 'N/A'}'),
+                        const SizedBox(height: 4,),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            //view profile button 
+                            TextButton(onPressed: (){ // This is the VoidCallback expected by onPressed
+                      Navigator.of(context).push(
+                      MaterialPageRoute(
+                      builder: (context) => ProfessionalProfilePage(
+                      professionalId: application['professionalId'],
+                      ),
+                      ),
+                      );
+                      },
+                                child: Text('View Profile')),
+                            application['status'] == 'pending' ?
+                            TextButton(onPressed: () {
+                              _acceptApplication(index, application['professionalId']) ;
+                            },
+                                child: Text('Accept Application'))
+                                :
+                            TextButton(onPressed: () {
+                              application['status'] = 'completed' ;
+                            },
+                                child: Text('Completed'))
+                          ],
+                        ),
                       ],
                     ),
                   );

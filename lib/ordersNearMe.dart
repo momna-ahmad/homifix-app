@@ -35,8 +35,18 @@ double calculateDistanceKm(gmaps.LatLng start, gmaps.LatLng end) {
   return R * c;
 }
 
-Future<List<DocumentSnapshot>> _fetchNearbyOrders(gmaps.LatLng userLocation) async {
-  final snapshot = await FirebaseFirestore.instance.collection('orders').get();
+Future<List<DocumentSnapshot>> _fetchNearbyOrders(gmaps.LatLng userLocation, String professionalId) async {
+  final categorySnapshot = await FirebaseFirestore.instance
+      .collection('services')
+      .where('userId', isEqualTo:professionalId)
+      .get();
+
+  List<String> categories = categorySnapshot.docs.map((doc) => doc['category'] as String).toSet().toList();
+
+  final snapshot = await FirebaseFirestore.instance.collection('orders')
+      .where('cateogry',whereIn: categories)
+      .where('status', isEqualTo: 'waiting')
+      .get();
 
   final allOrders = snapshot.docs;
 
@@ -251,7 +261,7 @@ class _OrdersNearMeState extends State<OrdersNearMe> {
   Future<void> _loadNearbyOrders(gmaps.LatLng location) async {
     setState(() => _loadingOrders = true);
     try {
-      final orders = await _fetchNearbyOrders(location);
+      final orders = await _fetchNearbyOrders(location, widget.professionalId);
       setState(() => _nearbyOrders = orders);
     } catch (e) {
       print("Error loading nearby orders: $e");
