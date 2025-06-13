@@ -21,6 +21,8 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _userId;
   String? _userRole;
 
+
+
   void _loginUser() async {
     try {
       final uid = await _authService.loginWithEmailPassword(
@@ -34,6 +36,9 @@ class _LoginScreenState extends State<LoginScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('uid', uid);
       await prefs.setString('role', role ?? '');
+
+      //await requestNotificationPermission();
+      //await saveFcmToken(uid);
 
       setState(() {
         _userId = uid;
