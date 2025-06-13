@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
+import '../services/serviceVideoPlayer.dart';
 import '../profilePage.dart';
 
 class LandingPage extends StatefulWidget {
@@ -76,11 +76,13 @@ class _LandingPageState extends State<LandingPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 1,
         title: const Text(
-          "Welcome to Home Services",
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          "Explore Services",
+           style: TextStyle(color: Colors.black), // dark text
         ),
-        backgroundColor: Colors.blue,
+        iconTheme: const IconThemeData(color: Colors.black87), // for any icons (if added later)
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -90,13 +92,6 @@ class _LandingPageState extends State<LandingPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                const Expanded(
-                  flex: 2,
-                  child: Text(
-                    "Browse Services by Category",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                  ),
-                ),
                 Expanded(
                   flex: 3,
                   child: TextField(
@@ -136,33 +131,34 @@ class _LandingPageState extends State<LandingPage> {
                 final docs = snapshot.data!.docs;
                 final categories = docs.map((doc) => doc['category']).toSet().toList();
 
-                return ListView.builder(
+                return SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  itemCount: categories.length,
-                  itemBuilder: (context, index) {
-                    final category = categories[index];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            if (selectedCategory == category) {
-                              selectedCategory = null;
-                            } else {
-                              selectedCategory = category;
-                            }
-                            _searchController.clear();
-                            searchQuery = '';
-                          });
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: selectedCategory == category ? Colors.blue : Colors.grey[300],
-                          foregroundColor: selectedCategory == category ? Colors.white : Colors.black,
+                  child: Row(
+                    children: List.generate(categories.length, (index) {
+                      final category = categories[index];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              if (selectedCategory == category) {
+                                selectedCategory = null;
+                              } else {
+                                selectedCategory = category;
+                              }
+                              _searchController.clear();
+                              searchQuery = '';
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: selectedCategory == category ? Colors.blue : Colors.grey[300],
+                            foregroundColor: selectedCategory == category ? Colors.white : Colors.black,
+                          ),
+                          child: Text(category),
                         ),
-                        child: Text(category),
-                      ),
-                    );
-                  },
+                      );
+                    }),
+                  ),
                 );
               },
             ),
@@ -170,6 +166,7 @@ class _LandingPageState extends State<LandingPage> {
 
           const SizedBox(height: 16),
 
+          // Services List
           // Services List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
@@ -183,12 +180,12 @@ class _LandingPageState extends State<LandingPage> {
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                 final services = snapshot.data!.docs;
 
-                final filteredServices = services.where((service) {
+                final filtered = services.where((service) {
                   final serviceName = (service['service'] ?? '').toString().toLowerCase();
                   return serviceName.contains(searchQuery);
                 }).toList();
 
-                if (filteredServices.isEmpty) {
+                if (filtered.isEmpty) {
                   if (searchQuery.isNotEmpty) {
                     return const Center(child: Text("No results found."));
                   } else if (selectedCategory != null) {
@@ -199,26 +196,83 @@ class _LandingPageState extends State<LandingPage> {
                 }
 
                 return ListView.builder(
-                  itemCount: filteredServices.length,
+                  itemCount: filtered.length,
                   itemBuilder: (context, index) {
-                    final service = filteredServices[index];
-                    final serviceName = service['service'] ?? '';
+                    final service = filtered[index];
+                    final data = service.data() as Map<String, dynamic>;
+                    final serviceName = data['service'] ?? '';
+                    final imageUrls = List<String>.from(data['imageUrls'] ?? []);
+                    final videoUrl = data['videoUrl'] ?? '';
+                    final category = data['category'] ?? '';
+
 
                     return Card(
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: ListTile(
-                        leading: const Icon(Icons.home_repair_service),
-                        title: highlightText(serviceName, searchQuery),
-                        subtitle: Text("Timing: ${service['timing']}"),
-                        onTap: () {
-                          final userId = service['userId'];
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ProfilePage(userId: userId),
+                      elevation: 5,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "$category",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: selectedCategory == category ? Colors.blue : Colors.black,
+                              ),
                             ),
-                          );
-                        },
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.home_repair_service, color: Colors.blue),
+                              title: highlightText(serviceName, searchQuery),
+                              onTap: () {
+                                final userId = data['userId'];
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ProfilePage(userId: userId),
+                                  ),
+                                );
+                              },
+                            ),
+
+
+                            const SizedBox(height: 8),
+
+                            // Images
+                            if (imageUrls.isNotEmpty)
+                              SizedBox(
+                                height: 200,
+                                child: PageView.builder(
+                                  itemCount: imageUrls.length,
+                                  itemBuilder: (_, i) => ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Image.network(
+                                      imageUrls[i],
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                            // Video
+                            if (videoUrl.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12.0),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: SizedBox(
+                                    height: 200,
+                                    width: double.infinity,
+                                    child: ServiceVideoPlayer(videoUrl: videoUrl),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     );
                   },

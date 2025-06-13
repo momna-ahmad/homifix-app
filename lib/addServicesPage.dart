@@ -2,58 +2,21 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../shared/categories.dart';
+import 'profilePictureUploader.dart';
+import 'services/serviceVideoPlayer.dart';
+import 'viewServices.dart';
 
 class AddServicesPage extends StatelessWidget {
   final String userId;
-  const AddServicesPage({required this.userId, super.key});
+  final String role;
+  const AddServicesPage({super.key, required this.userId,required this.role});
 
-  void _showAddServiceModal(BuildContext context) {
+  void _showAddServiceModal(BuildContext context, {DocumentSnapshot? serviceToEdit}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _ServiceForm(userId: userId),
-    );
-  }
-
-  void _showEditServiceModal(BuildContext context, DocumentSnapshot service) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _ServiceForm(
-        userId: userId,
-        serviceToEdit: service,
-      ),
-    );
-  }
-
-  void _confirmDelete(BuildContext context, String serviceId) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Confirm Delete'),
-        content: const Text('Are you sure you want to delete this service?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await FirebaseFirestore.instance
-                  .collection('services')
-                  .doc(serviceId)
-                  .delete();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Service deleted')),
-              );
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      builder: (_) => _ServiceForm(userId: userId, serviceToEdit: serviceToEdit),
     );
   }
 
@@ -61,73 +24,25 @@ class AddServicesPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('My Services')),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('services')
-            .where('userId', isEqualTo: userId)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text('No services added yet.'));
-          }
-
-          final services = snapshot.data!.docs;
-
-          return ListView.builder(
-            itemCount: services.length,
-            itemBuilder: (context, index) {
-              final service = services[index];
-              final category = service['category'] ?? 'No Category';
-              final description = service['service'] ?? 'No Description';
-              final timing = service['timing'] ?? 'No Timing';
-
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  title: Row(
-                    children: [
-                      const Icon(Icons.home_repair_service, color: Colors.blue),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          category,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.edit, size: 18),
-                        label: const Text('Edit'),
-                        onPressed: () => _showEditServiceModal(context, service),
-                      ),
-                      TextButton.icon(
-                        icon: const Icon(Icons.delete, size: 18, color: Colors.red),
-                        label: const Text('Delete', style: TextStyle(color: Colors.red)),
-                        onPressed: () => _confirmDelete(context, service.id),
-                      ),
-                    ],
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 4),
-                      Text(description),
-                      const SizedBox(height: 4),
-                      Text('Timing: $timing', style: const TextStyle(color: Colors.grey)),
-                    ],
-                  ),
-                ),
-              );
-            },
+      body: ViewServicesPage(
+        userId: userId,
+        role: role,
+        onEdit: (context, service) => _showAddServiceModal(context, serviceToEdit: service),
+        onDelete: (context, serviceId) async {
+          final confirm = await showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text("Delete Service"),
+              content: const Text("Are you sure you want to delete this service?"),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Delete", style: TextStyle(color: Colors.red))),
+              ],
+            ),
           );
+          if (confirm == true) {
+            await FirebaseFirestore.instance.collection('services').doc(serviceId).delete();
+          }
         },
       ),
       floatingActionButton: FloatingActionButton(
@@ -141,7 +56,6 @@ class AddServicesPage extends StatelessWidget {
 class _ServiceForm extends StatefulWidget {
   final String userId;
   final DocumentSnapshot? serviceToEdit;
-
   const _ServiceForm({required this.userId, this.serviceToEdit});
 
   @override
@@ -151,8 +65,9 @@ class _ServiceForm extends StatefulWidget {
 class _ServiceFormState extends State<_ServiceForm> {
   String? _selectedCategory;
   String? _selectedSubcategory;
-  final TextEditingController _customSubcategoryController = TextEditingController();
-  final TextEditingController _timingController = TextEditingController();
+  final _customSubcategoryController = TextEditingController();
+  List<String> _imageUrls = [];
+  String? _videoUrl;
   bool _isSubmitting = false;
 
   @override
@@ -162,21 +77,30 @@ class _ServiceFormState extends State<_ServiceForm> {
       final data = widget.serviceToEdit!.data() as Map<String, dynamic>;
       _selectedCategory = data['category'];
       _selectedSubcategory = data['service'];
-      _timingController.text = data['timing'] ?? '';
+      _imageUrls = List<String>.from(data['imageUrls'] ?? []);
+      _videoUrl = data['videoUrl'];
+      _customSubcategoryController.text = subcategories[_selectedCategory]?.contains(_selectedSubcategory) == false
+          ? _selectedSubcategory ?? ''
+          : '';
     }
   }
 
-  void _submitService() async {
-    if (_selectedCategory == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a category')),
-      );
-      return;
+  Future<void> _uploadMedia(bool isVideo) async {
+    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+    if (isVideo) {
+      final url = await pickAndUploadMediaToCloudinary(context: context, isVideo: true);
+      Navigator.pop(context);
+      if (url != null) setState(() => _videoUrl = url);
+    } else {
+      final urls = await pickAndUploadMediaToCloudinary(context: context, isVideo: false, allowMultiple: true);
+      Navigator.pop(context);
+      if (urls != null) setState(() => _imageUrls = urls);
     }
-    if (_selectedSubcategory == null || _selectedSubcategory!.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select or enter a subcategory')),
-      );
+  }
+
+  Future<void> _submitService() async {
+    if (_selectedCategory == null || _selectedSubcategory == null || _selectedSubcategory!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please complete all fields')));
       return;
     }
 
@@ -186,26 +110,28 @@ class _ServiceFormState extends State<_ServiceForm> {
       'userId': widget.userId,
       'category': _selectedCategory!,
       'service': _selectedSubcategory!.trim(),
-      'timing': _timingController.text.trim(),
+      'imageUrls': _imageUrls,
+      'videoUrl': _videoUrl ?? '',
       'createdAt': FieldValue.serverTimestamp(),
     };
 
-    if (widget.serviceToEdit != null) {
-      await FirebaseFirestore.instance
-          .collection('services')
-          .doc(widget.serviceToEdit!.id)
-          .update(data);
-    } else {
-      await FirebaseFirestore.instance.collection('services').add(data);
+    try {
+      if (widget.serviceToEdit != null) {
+        await FirebaseFirestore.instance.collection('services').doc(widget.serviceToEdit!.id).update(data);
+      } else {
+        await FirebaseFirestore.instance.collection('services').add(data);
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
-
-    if (mounted) Navigator.pop(context);
   }
 
   @override
   void dispose() {
     _customSubcategoryController.dispose();
-    _timingController.dispose();
     super.dispose();
   }
 
@@ -213,158 +139,99 @@ class _ServiceFormState extends State<_ServiceForm> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: Container(color: Colors.black.withOpacity(0.3)),
-        ),
+        BackdropFilter(filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4), child: Container(color: Colors.black26)),
         DraggableScrollableSheet(
-          initialChildSize: 0.75,
+          initialChildSize: 0.85,
           minChildSize: 0.6,
-          maxChildSize: 0.9,
+          maxChildSize: 0.95,
           builder: (_, controller) => Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
+            padding: const EdgeInsets.all(16),
             child: ListView(
               controller: controller,
               children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[400],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
+                const Center(child: Text("Add/Edit Service", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: _selectedCategory,
+                  decoration: const InputDecoration(labelText: "Category", prefixIcon: Icon(Icons.category)),
+                  items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (val) => setState(() {
+                    _selectedCategory = val;
+                    _selectedSubcategory = null;
+                    _customSubcategoryController.clear();
+                  }),
                 ),
+                const SizedBox(height: 12),
+                if (_selectedCategory != null && subcategories[_selectedCategory!]!.isNotEmpty)
+                  Wrap(
+                    spacing: 8,
+                    children: subcategories[_selectedCategory!]!.map((s) {
+                      final selected = s == _selectedSubcategory;
+                      final disabled = _customSubcategoryController.text.isNotEmpty;
+                      return ChoiceChip(
+                        label: Text(s),
+                        selected: selected,
+                        onSelected: disabled ? null : (sel) => setState(() => _selectedSubcategory = sel ? s : null),
+                      );
+                    }).toList(),
+                  ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _customSubcategoryController,
+                  decoration: const InputDecoration(labelText: 'Or enter custom subcategory'),
+                  onChanged: (val) => setState(() {
+                    _selectedSubcategory = val.trim().isEmpty ? null : val.trim();
+                  }),
+                ),
+                const SizedBox(height: 16),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.build, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Text(
-                      "Add/Edit Service",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.image),
+                        label: const Text("Upload Images"),
+                        onPressed: () => _uploadMedia(false),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.videocam),
+                        label: const Text("Upload Video"),
+                        onPressed: () => _uploadMedia(true),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                DropdownButtonFormField<String>(
-                  decoration: InputDecoration(
-                    labelText: 'Category',
-                    prefixIcon: const Icon(Icons.category),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  items: categories
-                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                      .toList(),
-                  value: _selectedCategory,
-                  onChanged: (val) {
-                    setState(() {
-                      _selectedCategory = val;
-                      _selectedSubcategory = null;
-                      _customSubcategoryController.clear();
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                if (_selectedCategory != null &&
-                    subcategories[_selectedCategory!]!.isNotEmpty)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Select Subcategory:',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8.0,
-                        children: subcategories[_selectedCategory!]!.map((subcat) {
-                          final isSelected = _selectedSubcategory == subcat;
-                          final isDisabled = _customSubcategoryController.text.trim().isNotEmpty;
-                          return ChoiceChip(
-                            label: Text(subcat),
-                            selected: isSelected,
-                            onSelected: isDisabled
-                                ? null
-                                : (selected) {
-                              setState(() {
-                                _selectedSubcategory = selected ? subcat : null;
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _customSubcategoryController,
-                        decoration: InputDecoration(
-                          labelText: 'Or enter custom subcategory',
-                          prefixIcon: const Icon(Icons.add),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.check),
-                            onPressed: () {
-                              final text = _customSubcategoryController.text.trim();
-                              if (text.isNotEmpty) {
-                                setState(() {
-                                  _selectedSubcategory = text;
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                        onChanged: (val) {
-                          final text = val.trim();
-                          if (text.isNotEmpty) {
-                            setState(() {
-                              _selectedSubcategory = text;
-                            });
-                          } else {
-                            setState(() {
-                              _selectedSubcategory = null;
-                            });
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _timingController,
-                  decoration: InputDecoration(
-                    labelText: 'Timing (e.g., 10am - 2pm)',
-                    prefixIcon: const Icon(Icons.access_time),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.check),
-                    label: _isSubmitting
-                        ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                        : const Text('Submit'),
-                    onPressed: _isSubmitting ? null : _submitService,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                const SizedBox(height: 12),
+                if (_imageUrls.isNotEmpty)
+                  SizedBox(
+                    height: 100,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: _imageUrls.map((url) => Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: Image.network(url, width: 100, fit: BoxFit.cover),
+                      )).toList(),
                     ),
                   ),
+                if (_videoUrl != null && _videoUrl!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: ServiceVideoPlayer(videoUrl: _videoUrl!),
+                  ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  icon: _isSubmitting
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.save),
+                  label: Text(_isSubmitting ? "Saving..." : "Submit"),
+                  onPressed: _isSubmitting ? null : _submitService,
+                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                 ),
               ],
             ),

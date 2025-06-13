@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:home_services_app/professionalProfile.dart';
+import 'package:home_services_app/profilePage.dart';
 import 'professionalOrderPage.dart' ;
 
 // 1. Change to StatefulWidget to manage the Firestore stream
@@ -230,12 +231,13 @@ class _OrderApplicationsState extends State<OrderApplications> {
                                 onPressed: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
-                                      builder: (context) => ProfessionalProfilePage(
-                                        professionalId: application['professionalId'],
+                                      builder: (context) => ProfilePage(
+                                        userId: application['professionalId'], // Pass the professional's ID
                                       ),
                                     ),
                                   );
                                 },
+
                                 child: const Text('View Profile'),
                               ),
                               const SizedBox(width: 8), // Spacing between buttons

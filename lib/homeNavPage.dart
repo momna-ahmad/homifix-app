@@ -6,6 +6,7 @@ import 'addServicesPage.dart';
 import 'profilePage.dart';
 import 'landingPage.dart';
 import 'package:home_services_app/professionalSchedule.dart' ;
+import 'customerHistory.dart';
 
 class HomeNavPage extends StatefulWidget {
   final String userId;
@@ -28,7 +29,7 @@ class _HomeNavPageState extends State<HomeNavPage> {
     super.initState();
     if (widget.role.toLowerCase() == 'professional') {
       _pages = [
-        AddServicesPage(userId: widget.userId),
+        AddServicesPage(userId: widget.userId,role:widget.role),
         ProfessionalOrdersPage(professionalId: widget.userId),
         ProfessionalSchedule(userId: widget.userId),
         ProfilePage(userId: widget.userId),
@@ -52,9 +53,7 @@ class _HomeNavPageState extends State<HomeNavPage> {
   }
 
   Widget _buildHistoryPage() {
-    return const Center(
-      child: Text("History Page", style: TextStyle(fontSize: 18)),
-    );
+    return CustomerHistoryPage(userId: widget.userId);
   }
 
   Widget _buildCustomerOrdersPage() {
@@ -80,7 +79,9 @@ class _HomeNavPageState extends State<HomeNavPage> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        selectedItemColor: Colors.blue,
+        backgroundColor: Colors.blue.shade800, // ← background color added
+        selectedItemColor: Colors.white, // white for contrast
+        unselectedItemColor: Colors.white70, // light shade for inactive items
         type: BottomNavigationBarType.fixed,
         items: widget.role.toLowerCase() == 'professional'
             ? const [
@@ -90,7 +91,7 @@ class _HomeNavPageState extends State<HomeNavPage> {
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'My Profile'),
         ]
             : const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Explore'), // ← changed
           BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'My Orders'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
           BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
