@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:home_services_app/services/auth_service.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'signupScreen.dart';
 import 'CustomerOrderPage.dart';
 import 'homeNavPage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,6 +22,59 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
   String? _userId;
   String? _userRole;
+
+  // Interstitial Ad
+  InterstitialAd? _interstitialAd;
+  bool _isInterstitialAdReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInterstitialAd();
+  }
+
+  void _loadInterstitialAd() {
+    print('Loading interstitial ad...');
+    print('Ad Unit ID: ${dotenv.env['ADMOB_INTERSTITIAL_ID']}');
+
+    InterstitialAd.load(
+      adUnitId: dotenv.env['ADMOB_INTERSTITIAL_ID'] ?? 'ca-app-pub-9203166790299807/4944810074',
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (InterstitialAd ad) {
+          _interstitialAd = ad;
+          _isInterstitialAdReady = true;
+          print('✅ Interstitial ad loaded successfully');
+        },
+        onAdFailedToLoad: (LoadAdError error) {
+          print('❌ Interstitial ad failed to load: $error');
+          _isInterstitialAdReady = false;
+        },
+      ),
+    );
+  }
+  void _showInterstitialAd() {
+    if (_isInterstitialAdReady && _interstitialAd != null) {
+      _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
+        onAdDismissedFullScreenContent: (InterstitialAd ad) {
+          ad.dispose();
+          _loadInterstitialAd(); // Load a new ad for next time
+        },
+        onAdFailedToShowFullScreenContent: (InterstitialAd ad, AdError error) {
+          ad.dispose();
+          _loadInterstitialAd(); // Load a new ad for next time
+        },
+      );
+      _interstitialAd!.show();
+      _isInterstitialAdReady = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _interstitialAd?.dispose();
+    super.dispose();
+  }
 
   void _loginUser() async {
     try {
@@ -51,25 +104,30 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
 
-      // Navigate based on role
-      if (role?.toLowerCase() == 'professional') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => HomeNavPage(userId: uid,role:role!)),
-        );
-      } else if (role?.toLowerCase() == 'client') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => HomeNavPage(userId: uid,role:role!)),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Unknown role: $role'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      // Show interstitial ad before navigation
+      _showInterstitialAd();
+
+      // Navigate based on role (with slight delay to show ad first)
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (role?.toLowerCase() == 'professional') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => HomeNavPage(userId: uid, role: role!)),
+          );
+        } else if (role?.toLowerCase() == 'client') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => HomeNavPage(userId: uid, role: role!)),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Unknown role: $role'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      });
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
@@ -78,9 +136,6 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     }
   }
-
-
-
 
   @override
   Widget build(BuildContext context) {
