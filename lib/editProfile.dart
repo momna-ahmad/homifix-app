@@ -36,7 +36,11 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
   Future<void> _uploadProfileImage() async {
     setState(() => _loading = true);
 
-    final uploadedUrl = await pickAndUploadImageToCloudinary();
+    final uploadedUrl = await pickAndUploadMediaToCloudinary(
+      context: context,
+      isVideo: false,
+      allowMultiple: false,
+    );
     print('Uploaded image URL: $uploadedUrl');
 
     if (!mounted) return;

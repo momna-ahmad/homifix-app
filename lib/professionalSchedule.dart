@@ -76,7 +76,7 @@ class ProfessionalSchedule extends StatelessWidget {
   }
 
   // Helper function to parse date and time strings into a single DateTime object for sorting
-  DateTime? _parseDateTime(String? dateString, String? timeString) {
+  static DateTime? _parseDateTime(String? dateString, String? timeString) {
     if (dateString == null || timeString == null) {
       return null; // Cannot parse if parts are missing
     }
@@ -97,11 +97,16 @@ class ProfessionalSchedule extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Schedule'),
-        centerTitle: true,
-        backgroundColor: Colors.blueAccent,
-        foregroundColor: Colors.white, // Ensure text is visible on blue background
+        title: const Text(
+          'My Schedule',
+          style: TextStyle(color: Colors.black),
+        ),
+        centerTitle: false, // Aligns title to the left
+        backgroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.black), // back button & icons
+        elevation: 1, // optional subtle shadow
       ),
+
       body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         future: _fetchUserOrders(), // Call the async function to get user data
         builder: (context, snapshot) {
@@ -279,46 +284,60 @@ class ProfessionalSchedule extends StatelessWidget {
                       const Divider(height: 16, thickness: 0.8, color: Colors.grey),
                       // Customer Name
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Icon(Icons.location_pin, size: 20, color: Colors.blueGrey),
                           const SizedBox(width: 10),
-                          Text(
-                            'Location: $location',
-                            style: Theme.of(context).textTheme.titleMedium,
+                          Flexible(
+                            child: Text(
+                              'Location: $location',
+                              style: Theme.of(context).textTheme.titleMedium,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
                           ),
                         ],
                       ),
+
                       const SizedBox(height: 8),
                       // Date & Time
-                      Row(
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           const Icon(Icons.calendar_today, size: 20, color: Colors.blueGrey),
-                          const SizedBox(width: 10),
                           Text(
                             'Date: $date',
                             style: Theme.of(context).textTheme.bodyLarge,
                           ),
-                          const SizedBox(width: 20),
                           const Icon(Icons.access_time, size: 20, color: Colors.blueGrey),
-                          const SizedBox(width: 10),
                           Text(
                             'Time: $time',
                             style: Theme.of(context).textTheme.bodyLarge,
                           ),
                         ],
                       ),
+
                       const SizedBox(height: 8),
                       // Price
                       Row(
                         children: [
                           const Icon(Icons.payments, size: 20, color: Colors.blueGrey),
                           const SizedBox(width: 10),
-                          Text(
-                            'Price: Rs. $price',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                          Flexible(
+                            child: Text(
+                              'Price: Rs. $price',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyLarge
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
+
                       // You can add action buttons (e.g., "Start Service", "Contact Customer") here
                       // Align(
                       //   alignment: Alignment.bottomRight,

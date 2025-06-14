@@ -31,7 +31,7 @@ class CustomerOrdersPage extends StatelessWidget {
         throw Exception('Order does not exist for marking complete!');
       }
 
-      final orderData = orderSnapshot.data()! as Map<String, dynamic>;
+      final orderData = orderSnapshot.data()!;
       final String? selectedWorkerId = orderData['selectedWorkerId'] as String?;
 
       if (selectedWorkerId == null) {
@@ -85,11 +85,15 @@ class CustomerOrdersPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Orders'),
-        backgroundColor: Colors.lightBlue.shade700,
-        centerTitle: true,
-        elevation: 4,
+        backgroundColor: Colors.white,
+        elevation: 1,
+        title: const Text(
+          "My Orders",
+          style: TextStyle(color: Colors.black), // dark text
+        ),
+        iconTheme: const IconThemeData(color: Colors.black87), // for any icons (if added later)
       ),
+
       body: StreamBuilder<QuerySnapshot>(
         stream: ordersRef.snapshots(),
         builder: (context, snapshot) {
