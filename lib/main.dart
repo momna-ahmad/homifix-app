@@ -61,6 +61,8 @@ void main() async {
         AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+
     token = await FirebaseMessaging.instance.getToken();
     print('FCM Token: $token');
 

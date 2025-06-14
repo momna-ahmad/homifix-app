@@ -1,6 +1,69 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart'; // Required for DateFormat
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz;
+import 'main.dart';
+
+
+
+//notification code
+void _scheduleOrderReminder ({
+  required String service,
+  required DateTime scheduledDateTime,
+  required int id,
+}) {
+  flutterLocalNotificationsPlugin.show(
+    id,
+    'Test Notification',
+    'Reminder for your service: "$service"',
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'high_importance_channel',
+        'High Importance Notifications',
+        channelDescription: 'This channel is used for important notifications.',
+        importance: Importance.max,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+      ),
+    ),
+  );
+  //final DateTime reminderTime = scheduledDateTime.subtract(const Duration(days: 1));
+  //for testing
+  final DateTime reminderTime = DateTime.now().add(const Duration(minutes: 1));
+  print('📅 Scheduling notification for $service at $reminderTime');
+
+
+
+  // Only schedule if the reminder time is still in the future
+  if (reminderTime.isAfter(DateTime.now())) {
+    print('inside if') ;
+    print('📅 Scheduling notification for $service at $reminderTime');
+    flutterLocalNotificationsPlugin.zonedSchedule(
+      id, // Unique notification ID (you could hash order ID)
+      'Upcoming Order Reminder',
+      'You have "$service" scheduled tomorrow!',
+      tz.TZDateTime.from(reminderTime, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'high_importance_channel', // Same as your channel ID
+          'High Importance Notifications',
+          channelDescription: 'This channel is used for important notifications.',
+          importance: Importance.max,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+      ),
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation:
+      UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.dateAndTime,
+    );
+  }
+}
+
+//widget code
 
 class ProfessionalSchedule extends StatelessWidget {
   final String userId; // Parameter to receive the professional's user ID
@@ -133,6 +196,16 @@ class ProfessionalSchedule extends StatelessWidget {
               final String location = order['location']['address'] as String? ?? 'N/A' ;
               final String status = order['completionStatus'] as String? ?? 'Unknown';
               final String price = (order['price'] ?? 'N/A').toString(); // Convert price to string if it's a number
+              //for notification
+              final DateTime? orderDateTime = _parseDateTime(order['date'], order['time']);
+
+              if (orderDateTime != null) {
+                _scheduleOrderReminder(
+                  service: service,
+                  scheduledDateTime: orderDateTime,
+                  id: index, // Or use a unique ID like order.hashCode
+                );
+              }
 
               // Determine display properties based on status
               Color statusColor;
