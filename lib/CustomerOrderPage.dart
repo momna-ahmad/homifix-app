@@ -3,6 +3,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'addOrderPage.dart';
 import 'orderApplications.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+
+FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+
+void logOrderCompleted(String orderId) {
+  analytics.logEvent(
+    name: 'order_completed',
+    parameters: {
+      'order_id': orderId,
+    },
+  );
+}
 
 class CustomerOrdersPage extends StatelessWidget {
   final String userId;
@@ -44,6 +56,8 @@ class CustomerOrdersPage extends StatelessWidget {
 
         // Update the order status to 'completed'
         transaction.update(orderRef, {'status': 'completed'});
+
+        logOrderCompleted(orderId);
       });
 
       // Show success message

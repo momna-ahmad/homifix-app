@@ -6,6 +6,8 @@ import 'signupScreen.dart';
 import 'CustomerOrderPage.dart';
 import 'homeNavPage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -84,6 +86,16 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       final role = await _authService.getUserRole(uid!);
+
+      // Save FCM token to Firestore after login
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).update({
+          'fcmToken': fcmToken,
+        });
+        print('✅ FCM token updated in Firestore for user $uid');
+      }
+
 
       // Store user data in SharedPreferences
       final prefs = await SharedPreferences.getInstance();

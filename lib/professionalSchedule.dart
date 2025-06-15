@@ -14,21 +14,6 @@ void _scheduleOrderReminder ({
   required DateTime scheduledDateTime,
   required int id,
 }) {
-  flutterLocalNotificationsPlugin.show(
-    id,
-    'Test Notification',
-    'Reminder for your service: "$service"',
-    const NotificationDetails(
-      android: AndroidNotificationDetails(
-        'high_importance_channel',
-        'High Importance Notifications',
-        channelDescription: 'This channel is used for important notifications.',
-        importance: Importance.max,
-        priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
-      ),
-    ),
-  );
   //final DateTime reminderTime = scheduledDateTime.subtract(const Duration(days: 1));
   //for testing
   final DateTime reminderTime = DateTime.now().add(const Duration(minutes: 1));
@@ -39,7 +24,7 @@ void _scheduleOrderReminder ({
   // Only schedule if the reminder time is still in the future
   if (reminderTime.isAfter(DateTime.now())) {
     print('inside if') ;
-    print('📅 Scheduling notification for $service at $reminderTime');
+
     flutterLocalNotificationsPlugin.zonedSchedule(
       id, // Unique notification ID (you could hash order ID)
       'Upcoming Order Reminder',
@@ -58,8 +43,9 @@ void _scheduleOrderReminder ({
       androidAllowWhileIdle: true,
       uiLocalNotificationDateInterpretation:
       UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.dateAndTime,
+      //matchDateTimeComponents: DateTimeComponents.dateAndTime,
     );
+    print('📅 Scheduling notification for $service at $reminderTime');
   }
 }
 

@@ -1,5 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'main.dart' ;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+const String notificationApiUrl = 'https://localhost:5000/send-notification';
+
+Future<void> sendPushNotification({
+  required String customerFcmToken,
+  required String title,
+  required String body,
+}) async {
+  try {
+    final response = await http.post(
+      Uri.parse(notificationApiUrl),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'customerFcmToken': customerFcmToken,
+        'title': title,
+        'body': body,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      print('✅ Push notification sent successfully');
+    } else {
+      print('❌ Failed to send notification: ${response.body}');
+    }
+  } catch (e) {
+    print('🚨 Error sending notification: $e');
+  }
+}
 
 class RequestService {
   static Future<void> sendRequest({
@@ -66,6 +99,27 @@ class RequestService {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✅ Request sent successfully')),
       );
+
+      await showLocalNotification(
+        'Request Sent',
+        'Your request has been sent successfully!',
+      );
+
+      // Step 3: Send push notification to customer
+      final orderSnapshot = await orderRef.get();
+      final customerId = orderSnapshot.data()?['customerId'];
+      if (customerId != null) {
+        final customerDoc = await FirebaseFirestore.instance.collection('users').doc(customerId).get();
+        final customerFcmToken = customerDoc.data()?['fcmToken'];
+        if (customerFcmToken != null && customerFcmToken is String) {
+          await sendPushNotification(
+            customerFcmToken: customerFcmToken,
+            title: "New Request Received",
+            body: "A professional has applied to your order. Check it out!",
+          );
+        }
+      }
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error sending request: $e')),
