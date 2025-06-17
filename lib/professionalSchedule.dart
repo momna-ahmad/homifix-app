@@ -5,8 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'main.dart';
-
-
+import 'viewRoute.dart' ;
 
 //notification code
 void _scheduleOrderReminder ({
@@ -184,9 +183,13 @@ class ProfessionalSchedule extends StatelessWidget {
               final String service = order['service'] as String? ?? 'N/A Service';
               final String date = order['date'] as String? ?? 'N/A Date';
               final String time = order['time'] as String? ?? 'N/A Time';
-              final String location = order['location']['address'] as String? ?? 'N/A' ;
               final String status = order['completionStatus'] as String? ?? 'Unknown';
               final String price = (order['price'] ?? 'N/A').toString(); // Convert price to string if it's a number
+              final Map<String, dynamic> locationMap = order['location'] ?? {};
+              final String location = locationMap['address'] ?? 'N/A';
+              final double? lat = locationMap['lat'];
+              final double? lng = locationMap['lng'];
+
               //for notification
               final DateTime? orderDateTime = _parseDateTime(order['date'], order['time']);
 
@@ -323,6 +326,35 @@ class ProfessionalSchedule extends StatelessWidget {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton.icon(
+                          onPressed: (lat != null && lng != null)
+                              ? () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ViewRoute(
+                                  address: location,
+                                  lat: lat,
+                                  lng: lng,
+                                ),
+                              ),
+                            );
+                          }
+                              : null,
+                          icon: const Icon(Icons.map),
+                          label: const Text('View Route'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blueAccent,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+
 
                       // You can add action buttons (e.g., "Start Service", "Contact Customer") here
                       // Align(
@@ -338,6 +370,8 @@ class ProfessionalSchedule extends StatelessWidget {
                   ),
                 ),
               );
+
+
             },
           );
         },

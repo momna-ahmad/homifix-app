@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:home_services_app/professionalProfile.dart';
 import 'package:home_services_app/profilePage.dart';
 import 'professionalOrderPage.dart' ;
+import 'package:geolocator/geolocator.dart';
+
 
 class OrderApplications extends StatefulWidget {
   final String orderId;
@@ -28,6 +30,101 @@ class _OrderApplicationsState extends State<OrderApplications> {
   void dispose() {
     super.dispose();
   }
+
+  void _showLocationDialog(int index, String professionalId) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Send Current Location'),
+          content: const Text(
+            'Do you want to send your current location when accepting this application?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop(); // Close dialog
+                await _getCurrentLocationAndAccept(index, professionalId); // Fetch location and accept
+              },
+              child: const Text('Send Location'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
+
+  Future<void> _getCurrentLocationAndAccept(int index, String professionalId) async {
+
+    final orderRef = FirebaseFirestore.instance.collection('orders').doc(widget.orderId);
+    final orderSnapshot = await orderRef.get();
+
+    if (!orderSnapshot.exists) {
+      throw Exception('Order not found');
+    }
+
+    final orderData = orderSnapshot.data()!;
+
+    try {
+
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception('Location services are disabled.');
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          throw Exception('Location permissions are denied.');
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception('Location permissions are permanently denied.');
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // Update order with client's location before accepting
+      await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(widget.orderId)
+          .update({
+        'clientLocation': {
+          'address' : orderData['location']['address'],
+          'lat': position.latitude,
+          'lng': position.longitude,
+        }
+      });
+
+      // Now accept the application
+      //await
+      _acceptApplication(index, professionalId);
+    } catch (e) {
+      print('Location error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to get location: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+
 
   void _acceptApplication(int index, String professionalId) async {
     final orderDocRef = FirebaseFirestore.instance.collection('orders').doc(widget.orderId);
@@ -78,7 +175,7 @@ class _OrderApplicationsState extends State<OrderApplications> {
         final professionalDocRef = FirebaseFirestore.instance.collection('users').doc(professionalId);
 
         Map<String, dynamic> orderDataForProfessional = {
-          'location': orderData['location'],
+          'location': orderData['clientLocation'],
           'date': orderData['serviceDate'],
           'time': orderData['serviceTime'],
           'price': applications[index]['price'],
@@ -219,8 +316,9 @@ class _OrderApplicationsState extends State<OrderApplications> {
                               else if (applicationStatus == 'pending' && orderStatus != 'assigned' && orderStatus != 'completed')
                               // Show "Accept Application" button only if application is pending and order is not yet assigned
                                 ElevatedButton(
-                                  onPressed: () {
-                                    _acceptApplication(index, professionalId);
+                                  onPressed: () async {
+                                    //_acceptApplication(index, professionalId);
+                                    _showLocationDialog(index, professionalId);
                                   },
                                   child: const Text('Accept Application'),
                                   style: ElevatedButton.styleFrom(
