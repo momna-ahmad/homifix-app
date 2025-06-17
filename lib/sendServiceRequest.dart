@@ -4,7 +4,8 @@ import 'main.dart' ;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-const String notificationApiUrl = 'https://localhost:5000/send-notification';
+const String notificationApiUrl = 'http://10.0.2.2:5000/send-notification';
+
 
 Future<void> sendPushNotification({
   required String customerFcmToken,
