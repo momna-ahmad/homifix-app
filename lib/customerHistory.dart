@@ -107,9 +107,11 @@ class CustomerHistoryPage extends StatelessWidget {
                           const Icon(Icons.attach_money, size: 20),
                           const SizedBox(width: 6),
                           Text(
-                            'Rs. ${order['price'] ?? 'N/A'}',
+                            'Rs. ${(order['applications'] != null && order['applications'].isNotEmpty) ? order['applications'][0]['price'] ?? 'N/A' : 'N/A'}',
                             style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 14),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
                           ),
                         ],
                       ),

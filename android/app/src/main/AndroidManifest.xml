@@ -9,7 +9,7 @@
 
 
     <application
-        android:label="Fixify"
+        android:label="HomeServices"
 
         android:icon="@mipmap/ic_launcher">
         <!-- ✅ Add this line BELOW the icon/label/name and ABOVE the activity -->
