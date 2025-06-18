@@ -16,10 +16,15 @@ void logOrderCompleted(String orderId) {
   );
 }
 
-class CustomerOrdersPage extends StatelessWidget {
+class CustomerOrdersPage extends StatefulWidget {
   final String userId;
   const CustomerOrdersPage({required this.userId, super.key});
 
+  @override
+  State<CustomerOrdersPage> createState() => _CustomerOrdersPageState();
+}
+
+class _CustomerOrdersPageState extends State<CustomerOrdersPage> {
   // Function to show the add order modal
   void _showAddOrderModal(BuildContext context, String userId) {
     showModalBottomSheet(
@@ -95,7 +100,7 @@ class CustomerOrdersPage extends StatelessWidget {
     final theme = Theme.of(context);
     final ordersRef = FirebaseFirestore.instance
         .collection('orders')
-        .where('customerId', isEqualTo: userId);
+        .where('customerId', isEqualTo: widget.userId);
 
     return Scaffold(
       appBar: AppBar(
@@ -229,7 +234,7 @@ class CustomerOrdersPage extends StatelessWidget {
                             child: Padding(
                               padding: const EdgeInsets.only(top: 8.0, bottom: 8.0), // Add some padding
                               child: ElevatedButton.icon(
-                                onPressed: () => _markOrderComplete(context, order.id, userId),
+                                onPressed: () => _markOrderComplete(context, order.id, widget.userId),
                                 icon: const Icon(Icons.check_circle_outline),
                                 label: const Text('Mark Complete'),
                                 style: ElevatedButton.styleFrom(
@@ -263,7 +268,7 @@ class CustomerOrdersPage extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.lightBlue.shade700,
-        onPressed: () => _showAddOrderModal(context, userId),
+        onPressed: () => _showAddOrderModal(context, widget.userId),
         child: const Icon(Icons.add, size: 28),
       ),
     );
