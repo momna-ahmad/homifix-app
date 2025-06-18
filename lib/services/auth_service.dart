@@ -30,7 +30,6 @@ class AuthService {
     }
   }
 
-  // ✅ Move this method INSIDE the AuthService class
   Future<Map<String, dynamic>> getUserData(String uid) async {
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
@@ -42,5 +41,10 @@ class AuthService {
     } catch (e) {
       throw 'Error fetching user data: $e';
     }
+  }
+
+  // ✅ Add this method inside the class
+  Future<void> sendPasswordResetEmail(String email) async {
+    await _auth.sendPasswordResetEmail(email: email.trim());
   }
 }

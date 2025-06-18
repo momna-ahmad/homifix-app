@@ -20,6 +20,43 @@ class CustomerOrdersPage extends StatelessWidget {
   final String userId;
   const CustomerOrdersPage({required this.userId, super.key});
 
+  // Function to check if service date has passed
+  bool _isServiceDatePassed(String? serviceDate) {
+    if (serviceDate == null || serviceDate.isEmpty) {
+      return false; // If no date, don't filter out
+    }
+
+    try {
+      // Parse the service date - adjust the format based on how you store dates
+      // Common formats: 'yyyy-MM-dd', 'MM/dd/yyyy', 'dd/MM/yyyy'
+      DateTime parsedDate;
+
+      // Try different date formats
+      if (serviceDate.contains('/')) {
+        // Assuming MM/dd/yyyy format
+        parsedDate = DateFormat('MM/dd/yyyy').parse(serviceDate);
+      } else if (serviceDate.contains('-')) {
+        // Assuming yyyy-MM-dd format
+        parsedDate = DateFormat('yyyy-MM-dd').parse(serviceDate);
+      } else {
+        // If it's in another format, add more conditions or use a default
+        return false;
+      }
+
+      // Get current date without time
+      DateTime today = DateTime.now();
+      DateTime currentDateOnly = DateTime(today.year, today.month, today.day);
+      DateTime serviceDateOnly = DateTime(parsedDate.year, parsedDate.month, parsedDate.day);
+
+      // Return true if service date is before today
+      return serviceDateOnly.isBefore(currentDateOnly);
+    } catch (e) {
+      // If parsing fails, don't filter out the order
+      print('Error parsing date: $serviceDate, Error: $e');
+      return false;
+    }
+  }
+
   // Function to show the add order modal
   void _showAddOrderModal(BuildContext context, String userId) {
     showModalBottomSheet(
@@ -117,12 +154,20 @@ class CustomerOrdersPage extends StatelessWidget {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final orders = snapshot.data!.docs;
 
-          if (orders.isEmpty) {
+          final allOrders = snapshot.data!.docs;
+
+          // Filter out orders with passed service dates
+          final filteredOrders = allOrders.where((order) {
+            final data = order.data()! as Map<String, dynamic>;
+            final serviceDate = data['serviceDate'] as String?;
+            return !_isServiceDatePassed(serviceDate);
+          }).toList();
+
+          if (filteredOrders.isEmpty) {
             return const Center(
               child: Text(
-                'No orders found.',
+                'No active orders found.',
                 style: TextStyle(fontSize: 18, color: Colors.grey),
               ),
             );
@@ -130,9 +175,9 @@ class CustomerOrdersPage extends StatelessWidget {
 
           return ListView.builder(
             padding: const EdgeInsets.all(12),
-            itemCount: orders.length,
+            itemCount: filteredOrders.length,
             itemBuilder: (context, index) {
-              final order = orders[index];
+              final order = filteredOrders[index];
               final data = order.data()! as Map<String, dynamic>;
 
               final int applicationCount = (data['applications'] as List<dynamic>? ?? []).length;
@@ -218,7 +263,7 @@ class CustomerOrdersPage extends StatelessWidget {
                               ? data['location']['address'] ?? 'N/A'
                               : 'N/A',
                         ),
-                        _buildEmojiInfoRow('💰', 'Offered Price:', '\$${data['priceOffer']}'),
+                        _buildEmojiInfoRow('💰', 'Offered Price:', 'Rs.${data['priceOffer']}'),
                         _buildEmojiInfoRow('📅', 'Date:', data['serviceDate']),
                         _buildEmojiInfoRow('⏰', 'Time:', (data['serviceTime'] as String?) ?? 'N/A'),
 

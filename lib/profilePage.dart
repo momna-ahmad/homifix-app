@@ -5,6 +5,8 @@ import 'editProfile.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 
 class ProfilePage extends StatelessWidget {
   final String userId;
@@ -86,6 +88,11 @@ class ProfilePage extends StatelessWidget {
 
   Widget _buildProfessionalProfile(BuildContext context, Map<String, dynamic> userData, String userId) {
     final theme = Theme.of(context).textTheme;
+    final cnic = userData['cnic'] ?? 'Not Provided';
+    final whatsapp = userData['whatsapp'] ?? '';
+    final createdAt = userData['createdAt'] != null
+        ? (userData['createdAt'] as Timestamp).toDate().toLocal().toString().split(' ')[0]
+        : 'N/A';
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -99,61 +106,160 @@ class ProfilePage extends StatelessWidget {
 
         final services = servicesSnapshot.data!.docs;
 
-        return _buildProfileBase(context, userData, theme, children: [
-          const Divider(height: 32, thickness: 1.5),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Services Providing:',
-              style: theme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (services.isEmpty)
-            const Text('No services added by this professional.')
-          else
-            ListView.separated(
-              physics: const NeverScrollableScrollPhysics(),
-              shrinkWrap: true,
-              itemCount: services.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final service = services[index].data() as Map<String, dynamic>;
-                return Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('reviews')
+              .orderBy('timestamp', descending: true)
+              .snapshots(),
+          builder: (context, reviewSnapshot) {
+            final reviewDocs = reviewSnapshot.data?.docs ?? [];
+
+            final averageRating = reviewDocs.isNotEmpty
+                ? reviewDocs.map((doc) => (doc['rating'] ?? 0) as num).reduce((a, b) => a + b) / reviewDocs.length
+                : 0.0;
+
+            final recentReviews = reviewDocs.take(3).toList();
+
+            return _buildProfileBase(context, userData, theme, children: [
+              const Divider(height: 32, thickness: 1.5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.calendar_today, color: Colors.blueAccent),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Member Since: $createdAt',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
-                  elevation: 4,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          service['service'] ?? 'Unknown Service',
-                          style: theme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blue.shade800,
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text('CNIC: $cnic', style: theme.bodyMedium),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: whatsapp.isNotEmpty
+                    ? () async {
+                  final uri = Uri.parse('https://wa.me/$whatsapp');
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Could not open WhatsApp')),
+                    );
+                  }
+                }
+                    : null,
+                icon: const Icon(Icons.message_rounded),
+                label: Text(whatsapp.isNotEmpty ? 'Contact on WhatsApp' : 'WhatsApp Not Provided'),
+              ),
+              const Divider(height: 32, thickness: 1.5),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Services Providing:',
+                  style: theme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (services.isEmpty)
+                const Text('No services added by this professional.')
+              else
+                ListView.separated(
+                  physics: const NeverScrollableScrollPhysics(),
+                  shrinkWrap: true,
+                  itemCount: services.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final service = services[index].data() as Map<String, dynamic>;
+                    return Card(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              service['service'] ?? 'Unknown Service',
+                              style: theme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.blue.shade800,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text('Category: ${service['category'] ?? 'N/A'}'),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Added on: ${service['createdAt'] != null ? (service['createdAt'] as Timestamp).toDate().toLocal().toString().split('.')[0] : 'N/A'}',
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              const Divider(height: 32, thickness: 1.5),
+              if (reviewDocs.isNotEmpty) ...[
+                Row(
+                  children: [
+                    const Icon(Icons.star, color: Colors.orange),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Average Rating: ${averageRating.toStringAsFixed(1)}',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                ...recentReviews.map((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final rating = (data['rating'] ?? 0).toDouble();
+                  final text = data['reviewText'] ?? '';
+                  final customerId = data['customerId'];
+
+                  return FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance.collection('users').doc(customerId).get(),
+                    builder: (context, snapshot) {
+                      final reviewerName = (snapshot.data?.data() as Map<String, dynamic>?)?['name'] ?? 'Anonymous';
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        child: ListTile(
+                          title: Text(reviewerName),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  ...List.generate(
+                                    rating.floor(),
+                                        (_) => const Icon(Icons.star, size: 16, color: Colors.orange),
+                                  ),
+                                  if (rating - rating.floor() >= 0.5)
+                                    const Icon(Icons.star_half, size: 16, color: Colors.orange),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(text),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text('Category: ${service['category'] ?? 'N/A'}'),
-                        const SizedBox(height: 4),
-                        Text('Timing: ${service['timing'] ?? 'N/A'}'),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Added on: ${service['createdAt'] != null ? (service['createdAt'] as Timestamp).toDate().toLocal().toString().split('.')[0] : 'N/A'}',
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-        ]);
+                      );
+                    },
+                  );
+                }),
+
+              ] else
+                const Text('No reviews yet.', style: TextStyle(color: Colors.grey)),
+            ]);
+          },
+        );
       },
     );
   }
+
+
 
   Widget _buildCustomerProfile(BuildContext context, Map<String, dynamic> userData) {
     final theme = Theme.of(context).textTheme;
