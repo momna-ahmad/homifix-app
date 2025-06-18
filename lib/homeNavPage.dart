@@ -76,27 +76,34 @@ class _HomeNavPageState extends State<HomeNavPage> {
         index: _selectedIndex,
         children: _pages,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        backgroundColor: Colors.blue.shade800, // ← background color added
-        selectedItemColor: Colors.white, // white for contrast
-        unselectedItemColor: Colors.white70, // light shade for inactive items
-        type: BottomNavigationBarType.fixed,
-        items: widget.role.toLowerCase() == 'professional'
-            ? const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_repair_service), label: 'My Services'),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Job Posts'),
-          BottomNavigationBarItem(icon: Icon(Icons.schedule), label: 'Schedule'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'My Profile'),
-        ]
-            : const [
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Explore'), // ← changed
-          BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'My Orders'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-        ],
+      bottomNavigationBar: Theme(
+        data: Theme.of(context).copyWith(
+          splashColor: Colors.transparent, // No ripple
+          highlightColor: Colors.transparent, // No tap glow
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          backgroundColor: Colors.blue.shade800,
+          selectedItemColor: Colors.white,
+          unselectedItemColor: Colors.white70,
+          type: BottomNavigationBarType.fixed,
+          items: widget.role.toLowerCase() == 'professional'
+              ? const [
+            BottomNavigationBarItem(icon: Icon(Icons.home_repair_service), label: 'My Services'),
+            BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Job Posts'),
+            BottomNavigationBarItem(icon: Icon(Icons.schedule), label: 'Schedule'),
+            BottomNavigationBarItem(icon: Icon(Icons.person), label: 'My Profile'),
+          ]
+              : const [
+            BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Explore'),
+            BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'My Orders'),
+            BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+            BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
+          ],
+        ),
       ),
     );
   }
+
 }

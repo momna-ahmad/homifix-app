@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // Add this import
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../services/serviceVideoPlayer.dart';
 import '../profilePage.dart';
 import 'sendOrderCustomer.dart';
@@ -19,10 +22,118 @@ class _LandingPageState extends State<LandingPage> {
   String searchQuery = '';
   Timer? _debounce;
 
+  // Banner Ad variables
+  BannerAd? _bannerAd;
+  bool _isBannerAdReady = false;
+  bool _isAdInitialized = false;
+
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    _initializeAds();
+  }
+
+  // Initialize AdMob and then load banner ad
+  Future<void> _initializeAds() async {
+    try {
+      print('🔄 Initializing Google Mobile Ads...');
+
+      // Initialize AdMob
+      await MobileAds.instance.initialize();
+
+      // Wait a bit for initialization to complete
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      print('✅ Google Mobile Ads initialized successfully');
+
+      if (mounted) {
+        setState(() {
+          _isAdInitialized = true;
+        });
+        _loadBannerAd();
+      }
+    } catch (e) {
+      print('❌ Error initializing ads: $e');
+      // Try loading ad anyway
+      if (mounted) {
+        _loadBannerAd();
+      }
+    }
+  }
+
+  // Load Banner Ad with enhanced debugging
+  void _loadBannerAd() {
+    print('🚀 Starting to load banner ad...');
+
+    // Force test ad ID for debugging
+    String adUnitId;
+    if (kDebugMode) {
+      // Always use test ad in debug mode
+      adUnitId = 'ca-app-pub-3940256099942544/6300978111';
+      print('🧪 Using TEST ad unit ID: $adUnitId');
+    } else {
+      // Use production ad or fallback to test
+      adUnitId = dotenv.env['ADMOB_BANNER_ID'] ?? 'ca-app-pub-3940256099942544/6300978111';
+      print('💰 Using ad unit ID: $adUnitId');
+    }
+
+    // Dispose previous ad if exists
+    _bannerAd?.dispose();
+
+    _bannerAd = BannerAd(
+      adUnitId: adUnitId,
+      request: const AdRequest(),
+      size: AdSize.banner,
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          print('✅ Banner ad loaded successfully!');
+          //print('📏 Ad size: ${ad.size.width}x${ad.size.height}');
+          if (mounted) {
+            setState(() {
+              _isBannerAdReady = true;
+            });
+          }
+        },
+        onAdFailedToLoad: (ad, error) {
+          print('❌ Failed to load banner ad:');
+          print('   Error Code: ${error.code}');
+          print('   Error Message: ${error.message}');
+          print('   Error Domain: ${error.domain}');
+          print('   Response Info: ${error.responseInfo}');
+
+          if (mounted) {
+            setState(() {
+              _isBannerAdReady = false;
+            });
+          }
+          ad.dispose();
+
+          // Retry after 5 seconds
+          Timer(const Duration(seconds: 5), () {
+            if (mounted) {
+              print('🔄 Retrying banner ad load...');
+              _loadBannerAd();
+            }
+          });
+        },
+        onAdOpened: (ad) {
+          print('📱 Banner ad opened');
+        },
+        onAdClosed: (ad) {
+          print('📱 Banner ad closed');
+        },
+        onAdImpression: (ad) {
+          print('👁 Banner ad impression recorded');
+        },
+        onAdClicked: (ad) {
+          print('👆 Banner ad clicked');
+        },
+      ),
+    );
+
+    print('⏳ Loading banner ad...');
+    _bannerAd?.load();
   }
 
   void _onSearchChanged() {
@@ -39,6 +150,7 @@ class _LandingPageState extends State<LandingPage> {
     _debounce?.cancel();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -73,6 +185,111 @@ class _LandingPageState extends State<LandingPage> {
     return RichText(text: TextSpan(children: spans));
   }
 
+  // Enhanced widget for banner ad display with debug info and proper null checks
+  Widget _buildBannerAdWidget() {
+    // Show loading indicator if ads are still initializing
+    if (!_isAdInitialized) {
+      return Container(
+        height: 60,
+        margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[300]!, width: 0.5),
+        ),
+        child: const Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 8),
+              Text('Initializing ads...', style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show debug info in debug mode
+    if (kDebugMode && !_isBannerAdReady) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.orange[50],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.orange[300]!, width: 1),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.warning, color: Colors.orange),
+            const SizedBox(height: 8),
+            const Text(
+              'Banner Ad Not Loading',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Check debug console for error details',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: () {
+                print('🔄 Manual retry requested');
+                _loadBannerAd();
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Return empty space if ad is not ready and not in debug mode
+    if (!_isBannerAdReady || _bannerAd == null) {
+      return const SizedBox.shrink();
+    }
+
+    // Show the actual ad with proper null checks
+    return Container(
+      alignment: Alignment.center,
+      margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!, width: 0.5),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 8.0, bottom: 4.0),
+            child: Text(
+              'Advertisement',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+          // Fixed: Use AdSize.banner dimensions directly instead of accessing _bannerAd!.size
+          Container(
+            width: AdSize.banner.width.toDouble(),
+            height: AdSize.banner.height.toDouble(),
+            child: AdWidget(ad: _bannerAd!),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -81,14 +298,14 @@ class _LandingPageState extends State<LandingPage> {
         elevation: 1,
         title: const Text(
           "Explore Services",
-           style: TextStyle(color: Colors.black), // dark text
+          style: TextStyle(color: Colors.black),
         ),
-        iconTheme: const IconThemeData(color: Colors.black87), // for any icons (if added later)
+        iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Search bar and label
+          // Search bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
@@ -165,7 +382,8 @@ class _LandingPageState extends State<LandingPage> {
             ),
           ),
 
-          const SizedBox(height: 16),
+          // Banner Ad - Enhanced with debugging
+          _buildBannerAdWidget(),
 
           // Services List
           // Services List
@@ -217,7 +435,7 @@ class _LandingPageState extends State<LandingPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "$category",
+                              category,
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
@@ -238,6 +456,8 @@ class _LandingPageState extends State<LandingPage> {
                                 );
                               },
                             ),
+
+
                             const SizedBox(height: 8),
 
                             // Images
@@ -252,6 +472,10 @@ class _LandingPageState extends State<LandingPage> {
                                       imageUrls[i],
                                       fit: BoxFit.cover,
                                       width: double.infinity,
+                                      errorBuilder: (context, error, stackTrace) => Container(
+                                        color: Colors.grey[300],
+                                        child: const Icon(Icons.error),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -299,7 +523,6 @@ class _LandingPageState extends State<LandingPage> {
                         ),
                       ),
                     );
-
                   },
                 );
               },

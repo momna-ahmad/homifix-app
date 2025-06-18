@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../shared/categories.dart';
-import 'profilePictureUploader.dart';
+import 'addSevicesImage.dart';
 import 'services/serviceVideoPlayer.dart';
 import 'viewServices.dart';
 
