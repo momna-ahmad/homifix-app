@@ -8,6 +8,7 @@ import 'homeNavPage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'adminDashboard.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -121,12 +122,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Navigate based on role (with slight delay to show ad first)
       Future.delayed(const Duration(milliseconds: 500), () {
-        if (role?.toLowerCase() == 'professional') {
+        if (role?.toLowerCase() == 'admin') {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => HomeNavPage(userId: uid, role: role!)),
+            MaterialPageRoute(builder: (_) => const AdminDashboard()),
           );
-        } else if (role?.toLowerCase() == 'client') {
+        } else if (role?.toLowerCase() == 'professional' || role?.toLowerCase() == 'client') {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => HomeNavPage(userId: uid, role: role!)),
