@@ -3,6 +3,10 @@
         android:label="home_services_app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- ✅ Add this line BELOW the icon/label/name and ABOVE the activity -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-9203166790299807~2688212202" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
