@@ -50,31 +50,28 @@ void _scheduleOrderReminder ({
 
 //widget code
 
-class ProfessionalSchedule extends StatelessWidget {
-  final String userId; // Parameter to receive the professional's user ID
+class ProfessionalSchedule extends StatefulWidget {
+  final String userId;
 
   const ProfessionalSchedule({super.key, required this.userId});
 
-  // Helper function to fetch the user document from Firestore
+  @override
+  State<ProfessionalSchedule> createState() => _ProfessionalScheduleState();
+}
+class _ProfessionalScheduleState extends State<ProfessionalSchedule> {
+  String selectedFilter = 'upcoming'; // 'upcoming' or 'history'
+
   Future<DocumentSnapshot<Map<String, dynamic>>> _fetchUserOrders() {
-    return FirebaseFirestore.instance.collection('users').doc(userId).get();
+    return FirebaseFirestore.instance.collection('users').doc(widget.userId).get();
   }
 
-  // Helper function to parse date and time strings into a single DateTime object for sorting
   static DateTime? _parseDateTime(String? dateString, String? timeString) {
-    if (dateString == null || timeString == null) {
-      return null; // Cannot parse if parts are missing
-    }
+    if (dateString == null || timeString == null) return null;
     try {
-      // Combines date and time strings (e.g., "2025-06-10" + "10:30 AM")
-      final String dateTimeCombined = '$dateString $timeString';
-      // Parses the combined string into a DateTime object
-      // "yyyy-MM-dd" for date part, "hh:mm a" for 12-hour time with AM/PM
-      return DateFormat("yyyy-MM-dd hh:mm a").parse(dateTimeCombined);
+      return DateFormat("yyyy-MM-dd hh:mm a").parse('$dateString $timeString');
     } catch (e) {
-      // Print error if parsing fails, useful for debugging inconsistent data formats
-      print('Error parsing date/time "$dateString $timeString": $e');
-      return null; // Return null if parsing fails
+      print('Error parsing: $e');
+      return null;
     }
   }
 
@@ -82,313 +79,255 @@ class ProfessionalSchedule extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'My Schedule',
-          style: TextStyle(color: Colors.black),
-        ),
-        centerTitle: false, // Aligns title to the left
+        title: const Text('My Schedule', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Colors.black), // back button & icons
-        elevation: 1, // optional subtle shadow
+        iconTheme: const IconThemeData(color: Colors.black),
+        elevation: 1,
       ),
 
-      body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        future: _fetchUserOrders(), // Call the async function to get user data
-        builder: (context, snapshot) {
-          // --- 1. Error Handling ---
-          if (snapshot.hasError) {
-            return Center(
-              child: Text(
-                'Error: ${snapshot.error}',
-                style: const TextStyle(color: Colors.red, fontSize: 16),
-              ),
-            );
-          }
-
-          // --- 2. Loading State ---
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
-              ),
-            );
-          }
-
-          // --- 3. No User Data / User Not Found ---
-          if (!snapshot.hasData || !snapshot.data!.exists || snapshot.data!.data() == null) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.person_off, size: 80, color: Colors.grey),
-                  SizedBox(height: 20),
-                  Text(
-                    'Professional profile not found or no data available.',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          // --- 4. Extracting and Sorting Orders ---
-          final userData = snapshot.data!.data()!;
-          // Safely get the 'assignedOrders' array (or whatever field name you use)
-          final List<dynamic> rawOrders = userData['orders'] ?? [];
-
-          // Cast to List<Map<String, dynamic>> and filter out any non-map items
-          List<Map<String, dynamic>> orders = rawOrders
-              .whereType<Map<String, dynamic>>() // Ensures only maps are processed
-              .toList();
-
-          if (orders.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.calendar_month, size: 80, color: Colors.grey),
-                  SizedBox(height: 20),
-                  Text(
-                    'No assigned orders in your schedule yet.',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          // Sort the orders list by date and time
-          orders.sort((a, b) {
-            final DateTime? dateTimeA = _parseDateTime(a['date'] as String?, a['time'] as String?);
-            final DateTime? dateTimeB = _parseDateTime(b['date'] as String?, b['time'] as String?);
-
-            // Handle cases where parsing fails (e.g., missing or invalid date/time strings)
-            // Nulls will be treated as later, pushing them to the end of the sorted list
-            if (dateTimeA == null && dateTimeB == null) return 0;
-            if (dateTimeA == null) return 1; // 'a' comes after 'b' (a is null)
-            if (dateTimeB == null) return -1; // 'a' comes before 'b' (b is null)
-
-            // Actual comparison of valid DateTime objects
-            return dateTimeA.compareTo(dateTimeB);
-          });
-
-          // --- 5. Displaying the Sorted Schedule ---
-          return ListView.separated(
-            padding: const EdgeInsets.all(16.0),
-            itemCount: orders.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 12), // Space between cards
-            itemBuilder: (context, index) {
-              final order = orders[index];
-              // Safely extract data with fallbacks
-              final String service = order['service'] as String? ?? 'N/A Service';
-              final String date = order['date'] as String? ?? 'N/A Date';
-              final String time = order['time'] as String? ?? 'N/A Time';
-              final String status = order['completionStatus'] as String? ?? 'Unknown';
-              final String price = (order['price'] ?? 'N/A').toString(); // Convert price to string if it's a number
-              final Map<String, dynamic> locationMap = order['location'] ?? {};
-              final String location = locationMap['address'] ?? 'N/A';
-              final double? lat = locationMap['lat'];
-              final double? lng = locationMap['lng'];
-
-              //for notification
-              final DateTime? orderDateTime = _parseDateTime(order['date'], order['time']);
-
-              if (orderDateTime != null) {
-                _scheduleOrderReminder(
-                  service: service,
-                  scheduledDateTime: orderDateTime,
-                  id: index, // Or use a unique ID like order.hashCode
-                );
-              }
-
-              // Determine display properties based on status
-              Color statusColor;
-              IconData statusIcon;
-              switch (status.toLowerCase()) {
-                case 'pending':
-                  statusColor = Colors.orange.shade700;
-                  statusIcon = Icons.pending_actions;
-                  break;
-                case 'completed':
-                  statusColor = Colors.green.shade700;
-                  statusIcon = Icons.task_alt;
-                  break;
-                case 'cancelled':
-                  statusColor = Colors.red.shade700;
-                  statusIcon = Icons.cancel;
-                  break;
-                default:
-                  statusColor = Colors.grey.shade700;
-                  statusIcon = Icons.info_outline;
-              }
-
-              return Card(
-                elevation: 5, // Nice shadow effect
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15), // Rounded corners for the card
+      body: Column(
+        children: [
+          // --- Filter Buttons ---
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FilterChip(
+                  label: const Text('Upcoming'),
+                  selected: selectedFilter == 'upcoming',
+                  onSelected: (_) {
+                    setState(() {
+                      selectedFilter = 'upcoming';
+                    });
+                  },
+                  selectedColor: Colors.blue.shade100,
+                  checkmarkColor: Colors.blue,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Service Name
-                          Expanded(
-                            child: Text(
-                              service,
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade800,
-                              ),
-                              overflow: TextOverflow.ellipsis, // Prevents text overflow
-                            ),
-                          ),
-                          // Status Badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
+                const SizedBox(width: 10),
+                FilterChip(
+                  label: const Text('History'),
+                  selected: selectedFilter == 'history',
+                  onSelected: (_) {
+                    setState(() {
+                      selectedFilter = 'history';
+                    });
+                  },
+                  selectedColor: Colors.blue.shade100,
+                  checkmarkColor: Colors.blue,
+                ),
+              ],
+            ),
+          ),
+
+          // --- Orders List ---
+          Expanded(
+            child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              future: _fetchUserOrders(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const Center(child: Text('Error loading data'));
+                }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final userData = snapshot.data?.data();
+                final List<dynamic> rawOrders = userData?['orders'] ?? [];
+                List<Map<String, dynamic>> orders = rawOrders.whereType<Map<String, dynamic>>().toList();
+
+                // Sort by date
+                orders.sort((a, b) {
+                  final dateTimeA = _parseDateTime(a['date'], a['time']);
+                  final dateTimeB = _parseDateTime(b['date'], b['time']);
+                  if (dateTimeA == null) return 1;
+                  if (dateTimeB == null) return -1;
+                  return dateTimeA.compareTo(dateTimeB);
+                });
+
+                // Filter orders
+                final now = DateTime.now();
+                List<Map<String, dynamic>> filteredOrders = orders.where((order) {
+                  final orderDateTime = _parseDateTime(order['date'], order['time']);
+                  if (orderDateTime == null) return false;
+                  if (selectedFilter == 'upcoming') {
+                    return orderDateTime.isAfter(now);
+                  } else {
+                    return orderDateTime.isBefore(now);
+                  }
+                }).toList();
+
+                if (filteredOrders.isEmpty) {
+                  return const Center(child: Text('No orders found.'));
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredOrders.length,
+                  itemBuilder: (context, index) {
+                    final order = filteredOrders[index];
+                    final String service = order['service'] ?? 'N/A Service';
+                    final String date = order['date'] ?? 'N/A Date';
+                    final String time = order['time'] ?? 'N/A Time';
+                    final String status = order['completionStatus'] ?? 'Unknown';
+                    final String price = (order['price'] ?? 'N/A').toString();
+                    final Map<String, dynamic> locationMap = order['location'] ?? {};
+                    final String location = locationMap['address'] ?? 'N/A';
+                    final double? lat = locationMap['lat'];
+                    final double? lng = locationMap['lng'];
+
+                    // Schedule notification
+                    final DateTime? orderDateTime = _parseDateTime(order['date'], order['time']);
+                    if (orderDateTime != null && selectedFilter == 'upcoming') {
+                      _scheduleOrderReminder(
+                        service: service,
+                        scheduledDateTime: orderDateTime,
+                        id: index,
+                      );
+                    }
+
+                    // Set status color/icon
+                    Color statusColor;
+                    IconData statusIcon;
+                    switch (status.toLowerCase()) {
+                      case 'pending':
+                        statusColor = Colors.orange.shade700;
+                        statusIcon = Icons.pending_actions;
+                        break;
+                      case 'completed':
+                        statusColor = Colors.green.shade700;
+                        statusIcon = Icons.task_alt;
+                        break;
+                      case 'cancelled':
+                        statusColor = Colors.red.shade700;
+                        statusIcon = Icons.cancel;
+                        break;
+                      default:
+                        statusColor = Colors.grey.shade700;
+                        statusIcon = Icons.info_outline;
+                    }
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      elevation: 5,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Icon(statusIcon, size: 18, color: statusColor),
-                                const SizedBox(width: 6),
-                                Text(
-                                  status,
-                                  style: TextStyle(
-                                    color: statusColor,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
+                                Expanded(
+                                  child: Text(service,
+                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue.shade800),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: statusColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(statusIcon, size: 18, color: statusColor),
+                                      const SizedBox(width: 6),
+                                      Text(status,
+                                        style: TextStyle(
+                                          color: statusColor,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                        ],
-                      ),
-                      const Divider(height: 16, thickness: 0.8, color: Colors.grey),
-                      // Customer Name
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.location_pin, size: 20, color: Colors.blueGrey),
-                          const SizedBox(width: 10),
-                          Flexible(
-                            child: Text(
-                              'Location: $location',
-                              style: Theme.of(context).textTheme.titleMedium,
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 2,
+                            const Divider(height: 16),
+                            Row(
+                              children: [
+                                const Icon(Icons.location_pin, size: 20, color: Colors.blueGrey),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text('Location: $location',
+                                    style: Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 8),
-                      // Date & Time
-                      Wrap(
-                        spacing: 16, // space between date and time blocks
-                        runSpacing: 8, // vertical spacing if it wraps
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.calendar_today, size: 20, color: Colors.blueGrey),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Date: $date',
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              const Icon(Icons.access_time, size: 20, color: Colors.blueGrey),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Time: $time',
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-
-
-                      const SizedBox(height: 8),
-                      // Price
-                      Row(
-                        children: [
-                          const Icon(Icons.payments, size: 20, color: Colors.blueGrey),
-                          const SizedBox(width: 10),
-                          Flexible(
-                            child: Text(
-                              'Price: Rs. $price',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis,
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 16,
+                              runSpacing: 8,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today, size: 20, color: Colors.blueGrey),
+                                    const SizedBox(width: 4),
+                                    Text('Date: $date', style: Theme.of(context).textTheme.bodyLarge),
+                                  ],
+                                ),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.access_time, size: 20, color: Colors.blueGrey),
+                                    const SizedBox(width: 4),
+                                    Text('Time: $time', style: Theme.of(context).textTheme.bodyLarge),
+                                  ],
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: ElevatedButton.icon(
-                          onPressed: (lat != null && lng != null)
-                              ? () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ViewRoute(
-                                  address: location,
-                                  lat: lat,
-                                  lng: lng,
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.payments, size: 20, color: Colors.blueGrey),
+                                const SizedBox(width: 10),
+                                Text('Price: Rs. $price',
+                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            if (selectedFilter == 'upcoming' && lat != null && lng != null)
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ViewRoute(
+                                          address: location,
+                                          lat: lat,
+                                          lng: lng,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.map, color: Colors.white),
+                                  label: const Text('View Route'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue.shade800,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
                                 ),
                               ),
-                            );
-                          }
-                          : null,
-                          icon: const Icon(
-                            Icons.map,
-                            color: Colors.white,
-                          ),
-
-                          label: const Text('View Route'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue.shade800,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
+                          ],
                         ),
                       ),
-
-
-                      // You can add action buttons (e.g., "Start Service", "Contact Customer") here
-                      // Align(
-                      //   alignment: Alignment.bottomRight,
-                      //   child: TextButton(
-                      //     onPressed: () {
-                      //       // Action for this specific order
-                      //     },
-                      //     child: const Text('View Details'),
-                      //   ),
-                      // ),
-                    ],
-                  ),
-                ),
-              );
-
-
-            },
-          );
-        },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
