@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:home_services_app/professionalProfile.dart';
-import 'professionalOrderPage.dart' ;
+import 'package:home_services_app/profilePage.dart';
+import 'package:geolocator/geolocator.dart';
 
-// 1. Change to StatefulWidget to manage the Firestore stream
 class OrderApplications extends StatefulWidget {
   final String orderId;
   const OrderApplications({super.key, required this.orderId});
@@ -13,124 +12,135 @@ class OrderApplications extends StatefulWidget {
 }
 
 class _OrderApplicationsState extends State<OrderApplications> {
-  // Declare a Stream to listen for real-time updates on the order document
   late Stream<DocumentSnapshot<Map<String, dynamic>>> _orderStream;
 
   @override
   void initState() {
     super.initState();
-    // Initialize the stream: .snapshots() provides a stream of document changes
     _orderStream = FirebaseFirestore.instance
         .collection('orders')
-        .doc(widget.orderId) // Use widget.orderId as it's in a State now
+        .doc(widget.orderId)
         .snapshots();
   }
 
-  // Good practice: Dispose of the stream when the widget is removed
-  @override
-  void dispose() {
-    // No need to explicitly close the stream returned by Firestore .snapshots() as Firebase manages it
-    super.dispose();
+  void _showLocationDialog(int index, String professionalId) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Send Current Location'),
+          content: const Text(
+              'Do you want to send your current location when accepting this application?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _getCurrentLocationAndAccept(index, professionalId);
+              },
+              child: const Text('Send Location'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
-  // Your _acceptApplication logic (slightly refined for robustness and consistency)
+  Future<void> _getCurrentLocationAndAccept(int index, String professionalId) async {
+    final orderRef = FirebaseFirestore.instance.collection('orders').doc(widget.orderId);
+    final orderSnapshot = await orderRef.get();
+    if (!orderSnapshot.exists) throw Exception('Order not found');
+    final orderData = orderSnapshot.data()!;
+
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) throw Exception('Location services are disabled.');
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) throw Exception('Location permissions are denied.');
+      }
+      if (permission == LocationPermission.deniedForever) throw Exception('Location permissions are permanently denied.');
+
+      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+
+      await orderRef.update({
+        'clientLocation': {
+          'address': orderData['location']['address'],
+          'lat': position.latitude,
+          'lng': position.longitude,
+        }
+      });
+
+      _acceptApplication(index, professionalId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to get location: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   void _acceptApplication(int index, String professionalId) async {
     final orderDocRef = FirebaseFirestore.instance.collection('orders').doc(widget.orderId);
 
     try {
-      // Use a Firestore Transaction for atomic updates. This is crucial for data consistency
-      // when multiple fields in different documents (order and user) are updated together.
       await FirebaseFirestore.instance.runTransaction((transaction) async {
-        // Re-fetch the order document within the transaction to ensure it's up-to-date
-        DocumentSnapshot<Map<String, dynamic>> currentOrderSnapshot = await transaction.get(orderDocRef);
+        final currentOrderSnapshot = await transaction.get(orderDocRef);
+        if (!currentOrderSnapshot.exists) throw Exception('Order document disappeared during transaction!');
 
-        if (!currentOrderSnapshot.exists) {
-          throw Exception('Order document disappeared during transaction!');
-        }
+        final orderData = currentOrderSnapshot.data()!;
+        final applications = List.from(orderData['applications'] ?? []);
 
-        Map<String, dynamic> orderData = Map.from(currentOrderSnapshot.data()!);
-        List<dynamic> applications = List.from(orderData['applications'] ?? []);
-
-        // Safety check for valid application index
-        if (index < 0 || index >= applications.length) {
-          throw Exception('Invalid application index: $index');
-        }
-
-        // Optional: Prevent accepting if the order is already assigned or completed
+        if (index < 0 || index >= applications.length) throw Exception('Invalid application index: $index');
         if (orderData['status'] == 'assigned' || orderData['status'] == 'completed') {
-          print('Order is already assigned or completed. Cannot accept new application.');
-          if (mounted) { // Check if the widget is still in the tree before showing SnackBar
+          if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Order already assigned or completed!'),
-                backgroundColor: Colors.orange,
-              ),
+              const SnackBar(content: Text('Order already assigned or completed!'), backgroundColor: Colors.orange),
             );
           }
-          return; // Exit transaction if already assigned/completed
+          return;
         }
 
-        // 2. Update the status of the selected application to 'accepted'
-        Map<String, dynamic> updatedApplication = Map.from(applications[index]);
-        updatedApplication['status'] = 'accepted';
+        final updatedApplication = {...applications[index], 'status': 'accepted'};
         applications[index] = updatedApplication;
 
-        // 3. Reject all other pending applications for this order (good practice)
-        for (int i = 0; i < applications.length; i++) {
-          if (i != index) {
-            Map<String, dynamic> otherApplication = Map.from(applications[i]);
-            if (otherApplication['status'] == 'pending') { // Only reject if still pending
-              otherApplication['status'] = 'rejected';
-              applications[i] = otherApplication;
-            }
-          }
-        }
-
-        // 4. Update the main order document: applications array, order status, and selected worker ID
-        Map<String, dynamic> updateFields = {
+        transaction.update(orderDocRef, {
           'applications': applications,
-          'status': 'assigned', // Order status changes to 'assigned'
-          'selectedWorkerId': professionalId, // Set the selected worker ID
-        };
-
-        transaction.update(orderDocRef, updateFields);
-
-        // 5. Copy essential order data to the professional's 'orders' array (within the same transaction)
-        final professionalDocRef = FirebaseFirestore.instance.collection('users').doc(professionalId);
-
-        Map<String, dynamic> orderDataForProfessional = {
-          'location': orderData['location'],
-          'date': orderData['serviceDate'],
-          'time': orderData['serviceTime'],
-          'price': applications[index]['price'], // Use the price from the accepted application
-          'service': orderData['service'],
-          'completionStatus': 'pending', // Initial status for professional's view
-          'orderId': widget.orderId, // Include the order ID for reference
-        };
-
-        // Use FieldValue.arrayUnion within the transaction to add the order to the professional's list
-        transaction.update(professionalDocRef, {
-          'orders': FieldValue.arrayUnion([orderDataForProfessional])
+          'status': 'assigned',
+          'selectedWorkerId': professionalId,
         });
-      }); // End of runTransaction
 
-      print('Accepted application, updated order status, set selectedWorkerId, and updated professional orders.');
+        final professionalDocRef = FirebaseFirestore.instance.collection('users').doc(professionalId);
+        transaction.update(professionalDocRef, {
+          'orders': FieldValue.arrayUnion([
+            {
+              'location': orderData['clientLocation'],
+              'date': orderData['serviceDate'],
+              'time': orderData['serviceTime'],
+              'price': applications[index]['price'],
+              'service': orderData['service'],
+              'completionStatus': 'pending',
+              'orderId': widget.orderId,
+            }
+          ])
+        });
+      });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Application accepted and order assigned!'),
-            backgroundColor: Colors.green,
-          ),
+          const SnackBar(content: Text('Application accepted and order assigned!'), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
-      print('Error accepting application: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to accept application: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Failed to accept application: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -140,38 +150,19 @@ class _OrderApplicationsState extends State<OrderApplications> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Order Applications'),
-        centerTitle: true,
-      ),
-      // 2. Use StreamBuilder to listen for real-time changes
+      appBar: AppBar(title: const Text('Order Applications'), centerTitle: true),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: _orderStream, // Provide the stream here
+        stream: _orderStream,
         builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            // Show a loading indicator while data is being fetched initially
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text('Order not found.'));
-          }
+          if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData || !snapshot.data!.exists) return const Center(child: Text('Order not found.'));
 
           final data = snapshot.data!.data();
-          final applications = (data?['applications'] as List<dynamic>? ?? [])
-              .cast<Map<String, dynamic>>();
+          final applications = (data?['applications'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+          final orderStatus = data?['status'] as String? ?? 'pending';
 
-          // Get the current order status and selected worker ID for UI logic
-          final String orderStatus = data?['status'] as String? ?? 'pending';
-          final String? selectedWorkerId = data?['selectedWorkerId'] as String?;
-
-          if (applications.isEmpty) {
-            return const Center(
-              child: Text('No applications yet.'),
-            );
-          }
+          if (applications.isEmpty) return const Center(child: Text('No applications yet.'));
 
           return ListView.separated(
             padding: const EdgeInsets.all(12),
@@ -180,106 +171,85 @@ class _OrderApplicationsState extends State<OrderApplications> {
             itemBuilder: (context, index) {
               final application = applications[index];
               final professionalId = application['professionalId'] as String;
-
-              // Determine if this specific application is the accepted one
-              final bool isAcceptedApplication = application['status'] == 'accepted';
-              // Determine if the order is already assigned to a different worker
-              final bool isOrderAlreadyAssignedToOther =
-                  orderStatus == 'assigned' && selectedWorkerId != professionalId;
-
+              final applicationStatus = application['status'] as String? ?? 'pending';
 
               return Card(
                 elevation: 4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  future: FirebaseFirestore.instance.collection('users').doc(professionalId).get(),
-                  builder: (context, professionalSnapshot) {
-                    if (professionalSnapshot.connectionState == ConnectionState.waiting) {
-                      return ListTile(
-                        leading: const Icon(Icons.person, color: Colors.blueAccent),
-                        title: const Text('Loading professional info...'),
-                      );
-                    }
-                    if (professionalSnapshot.hasError || !professionalSnapshot.hasData || !professionalSnapshot.data!.exists) {
-                      return ListTile(
-                        leading: const Icon(Icons.person, color: Colors.blueAccent),
-                        title: const Text('Professional info not found'),
-                      );
-                    }
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                    future: FirebaseFirestore.instance.collection('users').doc(professionalId).get(),
+                    builder: (context, professionalSnapshot) {
+                      if (professionalSnapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (professionalSnapshot.hasError || !professionalSnapshot.hasData || !professionalSnapshot.data!.exists) {
+                        return const Text('Professional info not found');
+                      }
 
-                    final professionalData = professionalSnapshot.data!.data()!;
-                    final professionalName = professionalData['name'] ?? 'No Name';
+                      final professionalData = professionalSnapshot.data!.data()!;
+                      final professionalName = professionalData['name'] ?? 'No Name';
 
-                    return ListTile(
-                      leading: const Icon(Icons.person, color: Colors.blueAccent),
-                      title: Text('Professional: $professionalName'),
-                      subtitle: Column(
+                      return Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SizedBox(height: 4),
-                          Text('💬 Message: ${application['message'] ?? 'No message'}'),
-                          Text('💰 Price: Rs. ${application['price'] ?? 'N/A'}'),
-                          const SizedBox(height: 4,),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(professionalName,
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 8),
+                                Text('💬 Message: ${application['message'] ?? 'No message'}'),
+                                const SizedBox(height: 4),
+                                Text('💰 Price: Rs. ${application['price'] ?? 'N/A'}'),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              // View Profile button
-                              TextButton(
+                              ElevatedButton.icon(
+                                label: const Text('View Profile'),
                                 onPressed: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
-                                      builder: (context) => ProfessionalProfilePage(
-                                        professionalId: application['professionalId'],
-                                      ),
+                                      builder: (_) => ProfilePage(userId: professionalId),
                                     ),
                                   );
                                 },
-                                child: const Text('View Profile'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Theme.of(context).colorScheme.primary,
+                                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                ),
                               ),
-                              const SizedBox(width: 8), // Spacing between buttons
 
-                              // Conditional button/text based on application and order status
-                              if (application['status'] == 'pending' && !isOrderAlreadyAssignedToOther && orderStatus != 'completed')
-                              // Show Accept Application button only if pending and order not already assigned/completed
-                                ElevatedButton(
-                                  onPressed: () {
-                                    _acceptApplication(index, professionalId);
-                                  },
-                                  child: const Text('Accept Application'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: theme.colorScheme.primary,
-                                    foregroundColor: theme.colorScheme.onPrimary,
-                                  ),
-                                )
-                              else if (application['status'] == 'accepted')
-                              // Display 'Accepted' if this specific application is accepted
+                              const SizedBox(height: 8),
+                              if (applicationStatus == 'accepted')
                                 Chip(
                                   label: const Text('Accepted'),
                                   backgroundColor: Colors.green.shade100,
                                   avatar: const Icon(Icons.check_circle, color: Colors.green),
                                 )
-                              else if (application['status'] == 'rejected')
-                                // Display 'Rejected' if this specific application is rejected
-                                  Chip(
-                                    label: const Text('Rejected'),
-                                    backgroundColor: Colors.red.shade100,
-                                    avatar: const Icon(Icons.cancel, color: Colors.red),
-                                  )
-                                else if (isOrderAlreadyAssignedToOther)
-                                  // If order is assigned to someone else, this application cannot be accepted
-                                    Chip(
-                                      label: const Text('Order Assigned'),
-                                      backgroundColor: Colors.grey.shade200,
-                                      avatar: const Icon(Icons.info_outline, color: Colors.grey),
-                                    ),
+                              else if (applicationStatus == 'pending' &&
+                                  orderStatus != 'assigned' &&
+                                  orderStatus != 'completed')
+                                ElevatedButton(
+                                  onPressed: () => _showLocationDialog(index, professionalId),
+                                  child: const Text('Accept'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: theme.primaryColor,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
                             ],
                           ),
                         ],
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               );
             },

@@ -35,6 +35,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _loadInterstitialAd() {
+    print('Loading interstitial ad...');
+    print('Ad Unit ID: ${dotenv.env['ADMOB_INTERSTITIAL_ID']}');
+
     InterstitialAd.load(
       adUnitId: dotenv.env['ADMOB_INTERSTITIAL_ID'] ?? 'ca-app-pub-9203166790299807/4944810074',
       request: const AdRequest(),
@@ -42,8 +45,10 @@ class _LoginScreenState extends State<LoginScreen> {
         onAdLoaded: (InterstitialAd ad) {
           _interstitialAd = ad;
           _isInterstitialAdReady = true;
+          print('✅ Interstitial ad loaded successfully');
         },
         onAdFailedToLoad: (LoadAdError error) {
+          print('❌ Interstitial ad failed to load: $error');
           _isInterstitialAdReady = false;
         },
       ),
@@ -113,17 +118,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final role = await _authService.getUserRole(uid!);
 
+      // Save FCM token to Firestore after login
       try {
         final fcmToken = await FirebaseMessaging.instance.getToken();
         if (fcmToken != null) {
           await FirebaseFirestore.instance.collection('users').doc(uid).update({
             'fcmToken': fcmToken,
           });
+          print('✅ FCM token updated in Firestore for user $uid');
         }
       } catch (e) {
         print("⚠️ Failed to update FCM token: $e");
       }
 
+      // Store user data in SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('uid', uid);
       await prefs.setString('role', role ?? '');
@@ -292,8 +300,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 style: TextStyle(
                                   color: darkBlue,
                                   fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
                             ),
                           ],
                         ),

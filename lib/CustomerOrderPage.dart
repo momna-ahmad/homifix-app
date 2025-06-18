@@ -3,6 +3,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'addOrderPage.dart';
 import 'orderApplications.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+
+FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+
+void logOrderCompleted(String orderId) {
+  analytics.logEvent(
+    name: 'order_completed',
+    parameters: {
+      'order_id': orderId,
+    },
+  );
+}
 
 class CustomerOrdersPage extends StatelessWidget {
   final String userId;
@@ -31,7 +43,7 @@ class CustomerOrdersPage extends StatelessWidget {
         throw Exception('Order does not exist for marking complete!');
       }
 
-      final orderData = orderSnapshot.data()! as Map<String, dynamic>;
+      final orderData = orderSnapshot.data()!;
       final String? selectedWorkerId = orderData['selectedWorkerId'] as String?;
 
       if (selectedWorkerId == null) {
@@ -44,6 +56,8 @@ class CustomerOrdersPage extends StatelessWidget {
 
         // Update the order status to 'completed'
         transaction.update(orderRef, {'status': 'completed'});
+
+        logOrderCompleted(orderId);
       });
 
       // Show success message
@@ -85,11 +99,15 @@ class CustomerOrdersPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Orders'),
-        backgroundColor: Colors.lightBlue.shade700,
-        centerTitle: true,
-        elevation: 4,
+        backgroundColor: Colors.white,
+        elevation: 1,
+        title: const Text(
+          "My Orders",
+          style: TextStyle(color: Colors.black), // dark text
+        ),
+        iconTheme: const IconThemeData(color: Colors.black87), // for any icons (if added later)
       ),
+
       body: StreamBuilder<QuerySnapshot>(
         stream: ordersRef.snapshots(),
         builder: (context, snapshot) {

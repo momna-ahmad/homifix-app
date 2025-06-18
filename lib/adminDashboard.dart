@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'login.dart'; // Adjust path as needed
+import 'login.dart'; // Adjust path if needed
+import 'adminOrders.dart';
+import 'landingPage.dart';
+import 'professionals.dart';
+import 'customers.dart';
 
 void logoutUser(BuildContext context) async {
   await FirebaseAuth.instance.signOut();
@@ -16,7 +20,6 @@ void logoutUser(BuildContext context) async {
   );
 }
 
-
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
 
@@ -25,6 +28,8 @@ class AdminDashboard extends StatefulWidget {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
+  int _currentIndex = 0;
+
   int professionalCount = 0;
   int customerCount = 0;
   bool isLoading = true;
@@ -38,7 +43,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> fetchCounts() async {
     try {
       final usersCollection = FirebaseFirestore.instance.collection('users');
-
       final professionals = await usersCollection.where('role', isEqualTo: 'Professional').get();
       final customers = await usersCollection.where('role', isEqualTo: 'Client').get();
 
@@ -76,6 +80,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  // Pages list including Home with stats
+  List<Widget> get _pages => [
+    isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: GridView.count(
+        crossAxisCount: 2,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        children: [
+          buildStatCard('Professionals', professionalCount, Colors.indigo),
+          buildStatCard('Clients', customerCount, Colors.teal),
+        ],
+      ),
+    ),
+    const ProfessionalsPage(),
+    CustomersPage(),
+    AdminOrders(),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,19 +115,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ],
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: GridView.count(
-          crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          children: [
-            buildStatCard('Professional', professionalCount, Colors.indigo),
-            buildStatCard('Customers', customerCount, Colors.teal),
-          ],
-        ),
+      body: _pages[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: _currentIndex,
+        selectedItemColor: Colors.blue.shade800,
+        unselectedItemColor: Colors.grey,
+        onTap: (index) => setState(() => _currentIndex = index),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Professionals'),
+          BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Clients'),
+          BottomNavigationBarItem(icon: Icon(Icons.work), label: 'Services'),
+        ],
       ),
     );
   }

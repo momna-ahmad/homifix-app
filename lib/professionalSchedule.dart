@@ -1,6 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart'; // Required for DateFormat
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz;
+import 'main.dart';
+import 'viewRoute.dart' ;
+
+//notification code
+void _scheduleOrderReminder ({
+  required String service,
+  required DateTime scheduledDateTime,
+  required int id,
+}) {
+  //final DateTime reminderTime = scheduledDateTime.subtract(const Duration(days: 1));
+  //for testing
+  final DateTime reminderTime = DateTime.now().add(const Duration(minutes: 1));
+  print('📅 Scheduling notification for $service at $reminderTime');
+
+
+
+  // Only schedule if the reminder time is still in the future
+  if (reminderTime.isAfter(DateTime.now())) {
+    print('inside if') ;
+
+    flutterLocalNotificationsPlugin.zonedSchedule(
+      id, // Unique notification ID (you could hash order ID)
+      'Upcoming Order Reminder',
+      'You have "$service" scheduled tomorrow!',
+      tz.TZDateTime.from(reminderTime, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'high_importance_channel', // Same as your channel ID
+          'High Importance Notifications',
+          channelDescription: 'This channel is used for important notifications.',
+          importance: Importance.max,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+      ),
+      androidAllowWhileIdle: true,
+      uiLocalNotificationDateInterpretation:
+      UILocalNotificationDateInterpretation.absoluteTime,
+      //matchDateTimeComponents: DateTimeComponents.dateAndTime,
+    );
+    print('📅 Scheduling notification for $service at $reminderTime');
+  }
+}
+
+//widget code
 
 class ProfessionalSchedule extends StatelessWidget {
   final String userId; // Parameter to receive the professional's user ID
@@ -13,7 +61,7 @@ class ProfessionalSchedule extends StatelessWidget {
   }
 
   // Helper function to parse date and time strings into a single DateTime object for sorting
-  DateTime? _parseDateTime(String? dateString, String? timeString) {
+  static DateTime? _parseDateTime(String? dateString, String? timeString) {
     if (dateString == null || timeString == null) {
       return null; // Cannot parse if parts are missing
     }
@@ -34,11 +82,16 @@ class ProfessionalSchedule extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Schedule'),
-        centerTitle: true,
-        backgroundColor: Colors.blueAccent,
-        foregroundColor: Colors.white, // Ensure text is visible on blue background
+        title: const Text(
+          'My Schedule',
+          style: TextStyle(color: Colors.black),
+        ),
+        centerTitle: false, // Aligns title to the left
+        backgroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.black), // back button & icons
+        elevation: 1, // optional subtle shadow
       ),
+
       body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         future: _fetchUserOrders(), // Call the async function to get user data
         builder: (context, snapshot) {
@@ -130,9 +183,23 @@ class ProfessionalSchedule extends StatelessWidget {
               final String service = order['service'] as String? ?? 'N/A Service';
               final String date = order['date'] as String? ?? 'N/A Date';
               final String time = order['time'] as String? ?? 'N/A Time';
-              final String location = order['location']['address'] as String? ?? 'N/A' ;
               final String status = order['completionStatus'] as String? ?? 'Unknown';
               final String price = (order['price'] ?? 'N/A').toString(); // Convert price to string if it's a number
+              final Map<String, dynamic> locationMap = order['location'] ?? {};
+              final String location = locationMap['address'] ?? 'N/A';
+              final double? lat = locationMap['lat'];
+              final double? lng = locationMap['lng'];
+
+              //for notification
+              final DateTime? orderDateTime = _parseDateTime(order['date'], order['time']);
+
+              if (orderDateTime != null) {
+                _scheduleOrderReminder(
+                  service: service,
+                  scheduledDateTime: orderDateTime,
+                  id: index, // Or use a unique ID like order.hashCode
+                );
+              }
 
               // Determine display properties based on status
               Color statusColor;
@@ -174,7 +241,7 @@ class ProfessionalSchedule extends StatelessWidget {
                               service,
                               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.bold,
-                                color: Colors.deepPurple,
+                                color: Colors.blue.shade800,
                               ),
                               overflow: TextOverflow.ellipsis, // Prevents text overflow
                             ),
@@ -206,46 +273,103 @@ class ProfessionalSchedule extends StatelessWidget {
                       const Divider(height: 16, thickness: 0.8, color: Colors.grey),
                       // Customer Name
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Icon(Icons.location_pin, size: 20, color: Colors.blueGrey),
                           const SizedBox(width: 10),
-                          Text(
-                            'Location: $location',
-                            style: Theme.of(context).textTheme.titleMedium,
+                          Flexible(
+                            child: Text(
+                              'Location: $location',
+                              style: Theme.of(context).textTheme.titleMedium,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 2,
+                            ),
                           ),
                         ],
                       ),
+
                       const SizedBox(height: 8),
                       // Date & Time
-                      Row(
+                      Wrap(
+                        spacing: 16, // space between date and time blocks
+                        runSpacing: 8, // vertical spacing if it wraps
                         children: [
-                          const Icon(Icons.calendar_today, size: 20, color: Colors.blueGrey),
-                          const SizedBox(width: 10),
-                          Text(
-                            'Date: $date',
-                            style: Theme.of(context).textTheme.bodyLarge,
+                          Row(
+                            children: [
+                              const Icon(Icons.calendar_today, size: 20, color: Colors.blueGrey),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Date: $date',
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 20),
-                          const Icon(Icons.access_time, size: 20, color: Colors.blueGrey),
-                          const SizedBox(width: 10),
-                          Text(
-                            'Time: $time',
-                            style: Theme.of(context).textTheme.bodyLarge,
+                          Row(
+                            children: [
+                              const Icon(Icons.access_time, size: 20, color: Colors.blueGrey),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Time: $time',
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                            ],
                           ),
                         ],
                       ),
+
+
                       const SizedBox(height: 8),
                       // Price
                       Row(
                         children: [
                           const Icon(Icons.payments, size: 20, color: Colors.blueGrey),
                           const SizedBox(width: 10),
-                          Text(
-                            'Price: Rs. $price',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                          Flexible(
+                            child: Text(
+                              'Price: Rs. $price',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyLarge
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton.icon(
+                          onPressed: (lat != null && lng != null)
+                              ? () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ViewRoute(
+                                  address: location,
+                                  lat: lat,
+                                  lng: lng,
+                                ),
+                              ),
+                            );
+                          }
+                          : null,
+                          icon: const Icon(
+                            Icons.map,
+                            color: Colors.white,
+                          ),
+
+                          label: const Text('View Route'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.shade800,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ),
+
+
                       // You can add action buttons (e.g., "Start Service", "Contact Customer") here
                       // Align(
                       //   alignment: Alignment.bottomRight,
@@ -260,6 +384,8 @@ class ProfessionalSchedule extends StatelessWidget {
                   ),
                 ),
               );
+
+
             },
           );
         },

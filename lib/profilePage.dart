@@ -5,15 +5,20 @@ import 'editProfile.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 
 class ProfilePage extends StatelessWidget {
   final String userId;
-  const ProfilePage({super.key, required this.userId});
+  final bool isAdmin;
+
+  const ProfilePage({super.key, required this.userId, this.isAdmin = false});
+
 
   void logoutUser(BuildContext context) async {
-    await FirebaseAuth.instance.signOut(); // sign out from Firebase
+    await FirebaseAuth.instance.signOut();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // remove saved session
+    await prefs.clear();
 
     Navigator.pushAndRemoveUntil(
       context,
@@ -22,42 +27,144 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
+  void sendBatchRequest(BuildContext context, String userId) async {
+    try {
+      final batchRef = FirebaseFirestore.instance.collection('batch_requests');
+
+      // Check if there's already a pending request
+      final existing = await batchRef
+          .where('userId', isEqualTo: userId)
+          .where('status', isEqualTo: 'pending')
+          .get();
+
+      if (existing.docs.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('You already have a pending badge request.')),
+        );
+        return;
+      }
+
+      await batchRef.add({
+        'userId': userId,
+        'status': 'pending',
+        'requestedAt': Timestamp.now(),
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Batch request sent successfully.')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error sending batch request: $e')),
+      );
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).textTheme;
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final email = currentUser?.email;
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Professional Profile'),
-        backgroundColor: Colors.blue,
+        title: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance.collection('users')
+              .doc(userId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData || !snapshot.data!.exists) {
+              return const Text(
+                  'Profile', style: TextStyle(color: Colors.black));
+            }
+            final data = snapshot.data!.data() as Map<String, dynamic>;
+            final role = (data['role'] ?? '').toString().toLowerCase();
+            return Text(
+              role == 'professional'
+                  ? 'Professional Profile'
+                  : 'Customer Profile',
+              style: const TextStyle(color: Colors.black),
+            );
+          },
+        ),
+        backgroundColor: Colors.white,
+        elevation: 2,
+        iconTheme: const IconThemeData(color: Colors.black),
         actions: [
-          if (FirebaseAuth.instance.currentUser?.uid == userId) ...[
-            TextButton.icon(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => EditProfileDialog(userId: userId),
-                );
-              },
-              icon: const Icon(Icons.edit, color: Colors.white),
-              label: const Text('Edit', style: TextStyle(color: Colors.white)),
-            ),
-            IconButton(
-              icon: const Icon(Icons.logout),
-              tooltip: 'Logout',
-              onPressed: () => logoutUser(context),
-            ),
-          ],
+          FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const SizedBox();
+
+              final data = snapshot.data!.data() as Map<String, dynamic>;
+              final isCurrentUser = FirebaseAuth.instance.currentUser?.uid == userId;
+              final role = data['role']?.toString().toLowerCase();
+              final badgeStatus = data['badgeStatus'] ?? 'None';
+
+              return Row(
+                children: [
+                  if (isCurrentUser && role == 'professional')
+                    FutureBuilder<DocumentSnapshot>(
+                      future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData || !snapshot.data!.exists) return const SizedBox();
+
+                        final data = snapshot.data!.data() as Map<String, dynamic>;
+                        final badgeStatus = (data['badgeStatus'] ?? 'None').toString().toLowerCase();
+
+                        return IconButton(
+                          icon: const Icon(Icons.verified_outlined, color: Colors.black),
+                          tooltip: 'Request for Badge',
+                          onPressed: () async {
+                            if (badgeStatus == 'none') {
+                              await FirebaseFirestore.instance.collection('users').doc(userId).update({
+                                'badgeStatus': 'Pending',
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('✅ Badge request sent.')),
+                              );
+                            } else if (badgeStatus == 'pending') {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('⚠️ Badge request already sent and is under review.')),
+                              );
+                            } else if (badgeStatus == 'approved') {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('✅ You are already a verified professional.')),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Unknown badge status: $badgeStatus')),
+                              );
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  if (isCurrentUser)
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.black),
+                      tooltip: 'Edit Profile',
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => EditProfileDialog(userId: userId),
+                        );
+                      },
+                    ),
+                  if (isCurrentUser)
+                    IconButton(
+                      icon: const Icon(Icons.logout, color: Colors.black),
+                      tooltip: 'Logout',
+                      onPressed: () => logoutUser(context),
+                    ),
+                ],
+              );
+            },
+          ),
         ],
       ),
-
-
-
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+        stream: FirebaseFirestore.instance.collection('users')
+            .doc(userId)
+            .snapshots(),
         builder: (context, userSnapshot) {
           if (userSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -67,141 +174,359 @@ class ProfilePage extends StatelessWidget {
           }
 
           final userData = userSnapshot.data!.data()! as Map<String, dynamic>;
-          print('User Firestore data: $userData');
+          final role = (userData['role'] ?? '').toString().toLowerCase();
 
-          return StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('services')
-                .where('userId', isEqualTo: userId)
-                .snapshots(),
-            builder: (context, servicesSnapshot) {
-              if (servicesSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (!servicesSnapshot.hasData) {
-                return const Center(child: Text('Services data not available.'));
-              }
+          return role == 'professional'
+              ? _buildProfessionalProfile(context, userData, userId)
+              : _buildCustomerProfile(context, userData);
+        },
+      ),
+    );
+  }
 
-              final services = servicesSnapshot.data!.docs;
+  Widget _buildProfessionalProfile(BuildContext context,
+      Map<String, dynamic> userData, String userId) {
+    final theme = Theme
+        .of(context)
+        .textTheme;
+    final cnic = userData['cnic'] ?? 'Not Provided';
+    final whatsapp = userData['whatsapp'] ?? '';
+    final createdAt = userData['createdAt'] != null
+        ? (userData['createdAt'] as Timestamp).toDate().toLocal()
+        .toString()
+        .split(' ')[0]
+        : 'N/A';
 
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('services')
+          .where('userId', isEqualTo: userId)
+          .snapshots(),
+      builder: (context, servicesSnapshot) {
+        if (!servicesSnapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final services = servicesSnapshot.data!.docs;
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('reviews')
+              .orderBy('timestamp', descending: true)
+              .snapshots(),
+          builder: (context, reviewSnapshot) {
+            final reviewDocs = reviewSnapshot.data?.docs ?? [];
+
+            final averageRating = reviewDocs.isNotEmpty
+                ? reviewDocs.map((doc) => (doc['rating'] ?? 0) as num).reduce((
+                a, b) => a + b) / reviewDocs.length
+                : 0.0;
+
+            final recentReviews = reviewDocs.take(3).toList();
+
+            return _buildProfileBase(context, userData, theme, children: [
+              const Divider(height: 32, thickness: 1.5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.calendar_today, color: Colors.blueAccent),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Member Since: $createdAt',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text('CNIC: $cnic', style: theme.bodyMedium),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: whatsapp.isNotEmpty
+                    ? () async {
+                  final uri = Uri.parse('https://wa.me/$whatsapp');
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Could not open WhatsApp')),
+                    );
+                  }
+                }
+                    : null,
+                icon: const Icon(Icons.message_rounded),
+                label: Text(whatsapp.isNotEmpty
+                    ? 'Contact on WhatsApp'
+                    : 'WhatsApp Not Provided'),
+              ),
+              const Divider(height: 32, thickness: 1.5),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Services Providing:',
+                  style: theme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (services.isEmpty)
+                const Text('No services added by this professional.')
+              else
+                ListView.separated(
+                  physics: const NeverScrollableScrollPhysics(),
+                  shrinkWrap: true,
+                  itemCount: services.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final service = services[index].data() as Map<
+                        String,
+                        dynamic>;
+                    return Card(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius
+                          .circular(12)),
+                      elevation: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              service['service'] ?? 'Unknown Service',
+                              style: theme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.blue.shade800,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text('Category: ${service['category'] ?? 'N/A'}'),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Added on: ${service['createdAt'] != null
+                                  ? (service['createdAt'] as Timestamp).toDate()
+                                  .toLocal().toString()
+                                  .split('.')[0]
+                                  : 'N/A'}',
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              const Divider(height: 32, thickness: 1.5),
+              if (reviewDocs.isNotEmpty) ...[
+                Row(
                   children: [
-                    GestureDetector(
-                      onTap: () {
-                        if (userData['profileImage'] != null && userData['profileImage'].toString().isNotEmpty) {
-                          showDialog(
-                            context: context,
-                            builder: (_) => Dialog(
-                              backgroundColor: Colors.transparent,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: PhotoView(
-                                  imageProvider: NetworkImage(userData['profileImage']),
-                                  backgroundDecoration: const BoxDecoration(color: Colors.transparent),
-                                ),
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                      child: CircleAvatar(
-                        radius: 40,
-                        backgroundColor: Colors.grey.shade300,
-                        backgroundImage: (userData['profileImage'] != null && userData['profileImage'].toString().isNotEmpty)
-                            ? NetworkImage(userData['profileImage']) as ImageProvider
-                            : null,
-                        child: (userData['profileImage'] == null || userData['profileImage'].toString().isEmpty)
-                            ? const Icon(Icons.person, size: 40)
-                            : null,
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
+                    const Icon(Icons.star, color: Colors.orange),
+                    const SizedBox(width: 6),
                     Text(
-                      userData['name'] ?? 'No Name',
-                      style: theme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
+                      'Average Rating: ${averageRating.toStringAsFixed(1)}',
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600),
                     ),
-                    const SizedBox(height: 8),
-                    if (FirebaseAuth.instance.currentUser?.uid == userId)
-                      Text(
-                        FirebaseAuth.instance.currentUser?.email ?? 'No Email',
-                        style: theme.bodyMedium?.copyWith(color: Colors.grey[700]),
-                      ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Role: ${userData['role'] ?? 'N/A'}',
-                      style: theme.bodySmall?.copyWith(color: Colors.grey[700]),
-                    ),
-                    if ((userData['role'] ?? '').toLowerCase() == 'professional') ...[
-                    const Divider(height: 32, thickness: 1.5),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Services Providing:',
-                        style: theme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    if (services.isEmpty)
-                      const Text('No services added by this professional.')
-                    else
-                      ListView.separated(
-                        physics: const NeverScrollableScrollPhysics(),
-                        shrinkWrap: true,
-                        itemCount: services.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final service = services[index].data() as Map<String, dynamic>;
-                          return Card(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 4,
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    service['service'] ?? 'Unknown Service',
-                                    style: theme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.blue.shade800,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Category: ${service['category'] ?? 'N/A'}',
-                                     style: theme.bodySmall,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Timing: ${service['timing'] ?? 'N/A'}',
-                                     style: theme.bodySmall,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Added on: ${service['createdAt'] != null ? (service['createdAt'] as Timestamp).toDate().toLocal().toString().split('.')[0] : 'N/A'}',
-                                    style: theme.bodySmall,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
                   ],
                 ),
-              );
+                ...recentReviews.map((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final rating = (data['rating'] ?? 0).toDouble();
+                  final text = data['reviewText'] ?? '';
+                  final customerId = data['customerId'];
+
+                  return FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance.collection('users').doc(
+                        customerId).get(),
+                    builder: (context, snapshot) {
+                      final reviewerName = (snapshot.data?.data() as Map<
+                          String,
+                          dynamic>?)?['name'] ?? 'Anonymous';
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        child: ListTile(
+                          title: Text(reviewerName),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  ...List.generate(
+                                    rating.floor(),
+                                        (_) =>
+                                    const Icon(Icons.star, size: 16,
+                                        color: Colors.orange),
+                                  ),
+                                  if (rating - rating.floor() >= 0.5)
+                                    const Icon(Icons.star_half, size: 16,
+                                        color: Colors.orange),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(text),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                }),
+
+              ] else
+                const Text(
+                    'No reviews yet.', style: TextStyle(color: Colors.grey)),
+              const Divider(height: 32, thickness: 1.5),
+              FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const SizedBox();
+
+                  final data = snapshot.data!.data() as Map<String, dynamic>;
+                  final badgeStatus = data['badgeStatus'] ?? 'None';
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.verified_user, color: Colors.blueGrey),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Badge Status: ${badgeStatus[0].toUpperCase()}${badgeStatus.substring(1)}',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (badgeStatus == 'Pending')
+                        const Text('Your badge request is under review.',
+                            style: TextStyle(color: Colors.orange)),
+                      if (badgeStatus == 'Approved')
+                        const Text('You are a verified professional!',
+                            style: TextStyle(color: Colors.green)),
+                    ],
+                  );
+                },
+              ),
+
+            ]);
+          },
+        );
+      },
+    );
+  }
+
+
+  Widget _buildCustomerProfile(BuildContext context,
+      Map<String, dynamic> userData) {
+    final theme = Theme
+        .of(context)
+        .textTheme;
+
+    return _buildProfileBase(context, userData, theme, children: [
+      const Divider(height: 32, thickness: 1.5),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          'Customer Profile',
+          style: theme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+      ),
+      const SizedBox(height: 12),
+      const Text(
+        'This user is a customer and can browse or book services.',
+        style: TextStyle(color: Colors.black54),
+      ),
+    ]);
+  }
+
+  Widget _buildProfileBase(BuildContext context,
+      Map<String, dynamic> userData,
+      TextTheme theme, {
+        required List<Widget> children,
+      }) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final profileImage = userData['profileImage'];
+    final role = userData['role']?.toString().toLowerCase();
+    final badgeStatus = userData['badgeStatus']?.toString().toLowerCase();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          GestureDetector(
+            onTap: () {
+              if (profileImage != null && profileImage
+                  .toString()
+                  .isNotEmpty) {
+                showDialog(
+                  context: context,
+                  builder: (_) =>
+                      Dialog(
+                        backgroundColor: Colors.transparent,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: PhotoView(
+                            imageProvider: NetworkImage(profileImage),
+                            backgroundDecoration: const BoxDecoration(
+                                color: Colors.transparent),
+                          ),
+                        ),
+                      ),
+                );
+              }
             },
-          );
-        },
+            child: Stack(
+              children: [
+                CircleAvatar(
+                  radius: 40,
+                  backgroundColor: Colors.grey.shade300,
+                  backgroundImage: (profileImage
+                      ?.toString()
+                      .isNotEmpty ?? false)
+                      ? NetworkImage(profileImage) as ImageProvider
+                      : null,
+                  child: (profileImage == null || profileImage
+                      .toString()
+                      .isEmpty)
+                      ? const Icon(Icons.person, size: 40)
+                      : null,
+                ),
+
+                // ⭐ Verified star badge
+                if (role == 'professional' && badgeStatus == 'approved')
+                  const Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: CircleAvatar(
+                      backgroundColor: Colors.white,
+                      radius: 12,
+                      child: Icon(Icons.star, color: Colors.amber, size: 20),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            userData['name'] ?? 'No Name',
+            style: theme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          if (currentUser?.uid == userData['uid'])
+            Text(
+              currentUser?.email ?? 'No Email',
+              style: theme.bodyMedium?.copyWith(color: Colors.grey[700]),
+            ),
+          const SizedBox(height: 4),
+          Text(
+            'Role: ${userData['role'] ?? 'N/A'}',
+            style: theme.bodySmall?.copyWith(color: Colors.grey[700]),
+          ),
+          ...children,
+        ],
       ),
     );
   }

@@ -51,15 +51,16 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              'HomiFix',
+            Text(
+              'HomeServices',
               style: TextStyle(
                 fontSize: 40,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF4A90E2),
+                color: Colors.blue.shade800,
                 letterSpacing: 1.5,
               ),
             ),
+
             const SizedBox(height: 16),
             Text(
               'Helping Hands for Your Home',
@@ -69,8 +70,8 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
             const SizedBox(height: 30),
-            const CircularProgressIndicator(
-              color: Color(0xFF7ED6DF),
+            CircularProgressIndicator(
+              color: Colors.blue.shade800,
               strokeWidth: 2,
             ),
           ],

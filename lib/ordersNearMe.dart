@@ -44,7 +44,7 @@ Future<List<DocumentSnapshot>> _fetchNearbyOrders(gmaps.LatLng userLocation, Str
   List<String> categories = categorySnapshot.docs.map((doc) => doc['category'] as String).toSet().toList();
 
   final snapshot = await FirebaseFirestore.instance.collection('orders')
-      .where('cateogry',whereIn: categories)
+      .where('category',whereIn: categories)
       .where('status', isEqualTo: 'waiting')
       .get();
 
@@ -57,7 +57,7 @@ Future<List<DocumentSnapshot>> _fetchNearbyOrders(gmaps.LatLng userLocation, Str
 
     final orderLatLng = gmaps.LatLng(loc['lat'], loc['lng']);
     final distance = calculateDistanceKm(userLocation, orderLatLng);
-    return distance <= 50;
+    return distance <= 150;
   }).toList();
 
   return nearbyOrders;
@@ -360,6 +360,7 @@ class _OrdersNearMeState extends State<OrdersNearMe> {
                                     ),
                                   ),
                                   const SizedBox(height: 8),
+                                  Text("📅 Location: ${data['location']['address'] ?? 'N/A'}"),
                                   Text("📅 Date: ${data['serviceDate'] ?? 'N/A'}"),
                                   Text("⏰ Time: ${data['serviceTime'] ?? 'N/A'}"),
                                   Text("💰 Price: ${data['priceOffer'] ?? 'Not specified'}"),
