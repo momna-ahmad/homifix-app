@@ -7,6 +7,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../services/serviceVideoPlayer.dart';
 import '../profilePage.dart';
+import 'sendOrderCustomer.dart';
 
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
@@ -138,11 +139,9 @@ class _LandingPageState extends State<LandingPage> {
   void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () {
-      if (mounted) {
-        setState(() {
-          searchQuery = _searchController.text.toLowerCase();
-        });
-      }
+      setState(() {
+        searchQuery = _searchController.text.toLowerCase();
+      });
     });
   }
 
@@ -387,6 +386,7 @@ class _LandingPageState extends State<LandingPage> {
           _buildBannerAdWidget(),
 
           // Services List
+          // Services List
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: selectedCategory != null
@@ -424,6 +424,7 @@ class _LandingPageState extends State<LandingPage> {
                     final videoUrl = data['videoUrl'] ?? '';
                     final category = data['category'] ?? '';
 
+
                     return Card(
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       elevation: 5,
@@ -455,6 +456,7 @@ class _LandingPageState extends State<LandingPage> {
                                 );
                               },
                             ),
+
 
                             const SizedBox(height: 8),
 
@@ -492,6 +494,31 @@ class _LandingPageState extends State<LandingPage> {
                                   ),
                                 ),
                               ),
+
+                            const SizedBox(height: 12),
+
+                            // Send Order Button
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.send),
+                                label: const Text("Send Order"),
+                                onPressed: () {
+                                  final userId = data['userId'];
+                                  final serviceId = service.id; // or use any identifier you need
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => SendOrderCustomer(
+                                        userId: userId,
+                                        serviceId: serviceId,
+                                        // Add other params if needed
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                           ],
                         ),
                       ),
