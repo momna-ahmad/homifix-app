@@ -116,7 +116,7 @@ class _ProfessionalsPageState extends State<ProfessionalsPage> {
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('users')
-                  .where('role', isEqualTo: 'Professional')
+                  .where('role', whereIn: ['Professional', 'professional']) // Handle case variations
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -197,12 +197,14 @@ class _ProfessionalsPageState extends State<ProfessionalsPage> {
                         userData['Role']?.toString() ??
                         userData['userRole']?.toString() ?? 'No Role';
 
-                    final isReported = userData['reported'] == true ||
-                        userData['isReported'] == true ||
+                    // ✅ Fixed: Consistent isReported check (prioritize 'isReported' field)
+                    final isReported = userData['isReported'] == true ||
+                        userData['reported'] == true ||
                         userData['Reported'] == true;
 
-                    final isDisabled = userData['disabled'] == true ||
-                        userData['isDisabled'] == true ||
+                    // ✅ Fixed: Consistent isDisabled check (prioritize 'isDisabled' field)  
+                    final isDisabled = userData['isDisabled'] == true ||
+                        userData['disabled'] == true ||
                         userData['Disabled'] == true;
 
                     final userId = user.id;
@@ -326,7 +328,7 @@ class _ProfessionalsPageState extends State<ProfessionalsPage> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    // Show disable button only if worker is reported and not already disabled
+                                    // ✅ Show disable button only if worker is reported and not already disabled
                                     if (isReported && !isDisabled)
                                       Expanded(
                                         child: ElevatedButton.icon(
@@ -339,7 +341,7 @@ class _ProfessionalsPageState extends State<ProfessionalsPage> {
                                           label: const Text('Disable'),
                                         ),
                                       ),
-                                    // Show disabled button if worker is already disabled
+                                    // ✅ Show disabled button if worker is already disabled
                                     if (isDisabled)
                                       Expanded(
                                         child: ElevatedButton.icon(
@@ -352,7 +354,7 @@ class _ProfessionalsPageState extends State<ProfessionalsPage> {
                                           label: const Text('Disabled'),
                                         ),
                                       ),
-                                    // Show nothing if not reported and not disabled
+                                    // ✅ Show nothing if not reported and not disabled
                                     if (!isReported && !isDisabled)
                                       Expanded(
                                         child: Center(
@@ -383,6 +385,7 @@ class _ProfessionalsPageState extends State<ProfessionalsPage> {
     );
   }
 
+  // ✅ Fixed: Updated to use 'isDisabled' instead of 'disabled' for consistency
   void _disableUser(String userId, BuildContext context) {
     showDialog(
       context: context,
@@ -402,7 +405,7 @@ class _ProfessionalsPageState extends State<ProfessionalsPage> {
                       .collection('users')
                       .doc(userId)
                       .update({
-                    'disabled': true,
+                    'isDisabled': true,  // ✅ Using consistent field name
                     'disabledAt': FieldValue.serverTimestamp(),
                   });
 
