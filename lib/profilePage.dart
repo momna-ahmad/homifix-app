@@ -42,7 +42,7 @@ class ProfilePage extends StatelessWidget {
           const SnackBar(
               content: Text('You already have a pending badge request.')),
         );
-        return;
+        return false;
       }
 
       await batchRef.add({
@@ -51,15 +51,15 @@ class ProfilePage extends StatelessWidget {
         'requestedAt': Timestamp.now(),
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Batch request sent successfully.')),
-      );
+      return true;
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error sending batch request: $e')),
       );
+      return false;
     }
   }
+
 
 
   @override
@@ -97,7 +97,7 @@ class ProfilePage extends StatelessWidget {
               final data = snapshot.data!.data() as Map<String, dynamic>;
               final isCurrentUser = FirebaseAuth.instance.currentUser?.uid == userId;
               final role = data['role']?.toString().toLowerCase();
-              final badgeStatus = data['badgeStatus'] ?? 'None';
+
 
               return Row(
                 children: [
@@ -118,9 +118,14 @@ class ProfilePage extends StatelessWidget {
                               await FirebaseFirestore.instance.collection('users').doc(userId).update({
                                 'badgeStatus': 'Pending',
                               });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('✅ Badge request sent.')),
-                              );
+
+                              final success = await sendBatchRequest(context, userId);
+
+                              if (success) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('✅ Badge request sent.')),
+                                );
+                              }
                             } else if (badgeStatus == 'pending') {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('⚠️ Badge request already sent and is under review.')),
@@ -457,23 +462,19 @@ class ProfilePage extends StatelessWidget {
         children: [
           GestureDetector(
             onTap: () {
-              if (profileImage != null && profileImage
-                  .toString()
-                  .isNotEmpty) {
+              if (profileImage != null && profileImage.toString().isNotEmpty) {
                 showDialog(
                   context: context,
-                  builder: (_) =>
-                      Dialog(
-                        backgroundColor: Colors.transparent,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: PhotoView(
-                            imageProvider: NetworkImage(profileImage),
-                            backgroundDecoration: const BoxDecoration(
-                                color: Colors.transparent),
-                          ),
-                        ),
+                  builder: (_) => Dialog(
+                    backgroundColor: Colors.transparent,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: PhotoView(
+                        imageProvider: NetworkImage(profileImage),
+                        backgroundDecoration: const BoxDecoration(color: Colors.transparent),
                       ),
+                    ),
+                  ),
                 );
               }
             },
@@ -482,19 +483,15 @@ class ProfilePage extends StatelessWidget {
                 CircleAvatar(
                   radius: 40,
                   backgroundColor: Colors.grey.shade300,
-                  backgroundImage: (profileImage
-                      ?.toString()
-                      .isNotEmpty ?? false)
+                  backgroundImage: (profileImage?.toString().isNotEmpty ?? false)
                       ? NetworkImage(profileImage) as ImageProvider
                       : null,
-                  child: (profileImage == null || profileImage
-                      .toString()
-                      .isEmpty)
+                  child: (profileImage == null || profileImage.toString().isEmpty)
                       ? const Icon(Icons.person, size: 40)
                       : null,
                 ),
 
-                // ⭐ Verified star badge
+                // ⭐ Verified star badge on profile picture
                 if (role == 'professional' && badgeStatus == 'approved')
                   const Positioned(
                     right: 0,
@@ -509,11 +506,39 @@ class ProfilePage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          Text(
-            userData['name'] ?? 'No Name',
-            style: theme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
+
+          // Name with green badge if approved
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                userData['name'] ?? 'No Name',
+                style: theme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(width: 8),
+              if (role == 'professional' && badgeStatus == 'assigned') // or 'assigned' if you prefer
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade600,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.verified, color: Colors.white, size: 16),
+                      SizedBox(width: 4),
+                      Text(
+                        'Verified',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
+
           const SizedBox(height: 8),
           if (currentUser?.uid == userData['uid'])
             Text(
@@ -530,4 +555,7 @@ class ProfilePage extends StatelessWidget {
       ),
     );
   }
+
+
+
 }
