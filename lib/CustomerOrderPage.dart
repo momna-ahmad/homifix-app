@@ -16,10 +16,15 @@ void logOrderCompleted(String orderId) {
   );
 }
 
-class CustomerOrdersPage extends StatelessWidget {
+class CustomerOrdersPage extends StatefulWidget {
   final String userId;
   const CustomerOrdersPage({required this.userId, super.key});
 
+  @override
+  State<CustomerOrdersPage> createState() => _CustomerOrdersPageState();
+}
+
+class _CustomerOrdersPageState extends State<CustomerOrdersPage> {
   // Function to check if service date has passed
   bool _isServiceDatePassed(String? serviceDate) {
     if (serviceDate == null || serviceDate.isEmpty) {
@@ -132,7 +137,7 @@ class CustomerOrdersPage extends StatelessWidget {
     final theme = Theme.of(context);
     final ordersRef = FirebaseFirestore.instance
         .collection('orders')
-        .where('customerId', isEqualTo: userId);
+        .where('customerId', isEqualTo: widget.userId);
 
     return Scaffold(
       appBar: AppBar(
@@ -154,20 +159,19 @@ class CustomerOrdersPage extends StatelessWidget {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-
-          final allOrders = snapshot.data!.docs;
+          final unfiltered_orders = snapshot.data!.docs;
 
           // Filter out orders with passed service dates
-          final filteredOrders = allOrders.where((order) {
+          final orders = unfiltered_orders.where((order) {
             final data = order.data()! as Map<String, dynamic>;
             final serviceDate = data['serviceDate'] as String?;
             return !_isServiceDatePassed(serviceDate);
           }).toList();
 
-          if (filteredOrders.isEmpty) {
+          if (orders.isEmpty) {
             return const Center(
               child: Text(
-                'No active orders found.',
+                'No orders found.',
                 style: TextStyle(fontSize: 18, color: Colors.grey),
               ),
             );
@@ -175,9 +179,9 @@ class CustomerOrdersPage extends StatelessWidget {
 
           return ListView.builder(
             padding: const EdgeInsets.all(12),
-            itemCount: filteredOrders.length,
+            itemCount: orders.length,
             itemBuilder: (context, index) {
-              final order = filteredOrders[index];
+              final order = orders[index];
               final data = order.data()! as Map<String, dynamic>;
 
               final int applicationCount = (data['applications'] as List<dynamic>? ?? []).length;
@@ -263,7 +267,7 @@ class CustomerOrdersPage extends StatelessWidget {
                               ? data['location']['address'] ?? 'N/A'
                               : 'N/A',
                         ),
-                        _buildEmojiInfoRow('💰', 'Offered Price:', 'Rs.${data['priceOffer']}'),
+                        _buildEmojiInfoRow('💰', 'Offered Price:', '\$${data['priceOffer']}'),
                         _buildEmojiInfoRow('📅', 'Date:', data['serviceDate']),
                         _buildEmojiInfoRow('⏰', 'Time:', (data['serviceTime'] as String?) ?? 'N/A'),
 
@@ -274,7 +278,7 @@ class CustomerOrdersPage extends StatelessWidget {
                             child: Padding(
                               padding: const EdgeInsets.only(top: 8.0, bottom: 8.0), // Add some padding
                               child: ElevatedButton.icon(
-                                onPressed: () => _markOrderComplete(context, order.id, userId),
+                                onPressed: () => _markOrderComplete(context, order.id, widget.userId),
                                 icon: const Icon(Icons.check_circle_outline),
                                 label: const Text('Mark Complete'),
                                 style: ElevatedButton.styleFrom(
@@ -308,7 +312,7 @@ class CustomerOrdersPage extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.lightBlue.shade700,
-        onPressed: () => _showAddOrderModal(context, userId),
+        onPressed: () => _showAddOrderModal(context, widget.userId),
         child: const Icon(Icons.add, size: 28),
       ),
     );
