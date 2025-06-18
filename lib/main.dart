@@ -7,14 +7,14 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
 import 'homeNavPage.dart';
 import 'CustomerOrderPage.dart';
 import 'splashScreen.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 // Global plugin instance
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-FlutterLocalNotificationsPlugin();
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
 // Android notification channel
 const AndroidNotificationChannel channel = AndroidNotificationChannel(
@@ -24,22 +24,21 @@ const AndroidNotificationChannel channel = AndroidNotificationChannel(
   importance: Importance.max,
 );
 
+// FCM Background handler
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   print('Handling a background message: ${message.messageId}');
 }
 
+// Daily Reminder (one-time, 2 minutes from now)
 Future<void> scheduleDailyReminder() async {
-  //final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-
-  // Schedule for 2 minutes from now
   final now = tz.TZDateTime.now(tz.local);
   final scheduledDate = now.add(Duration(minutes: 2));
 
   await flutterLocalNotificationsPlugin.zonedSchedule(
-    0, // Notification ID
-    'Test Reminder', // Title
-    'This is a test notification scheduled 2 minutes from now.', // Body
+    0,
+    'Test Reminder',
+    'This is a test notification scheduled 2 minutes from now.',
     scheduledDate,
     NotificationDetails(
       android: AndroidNotificationDetails(
@@ -52,54 +51,47 @@ Future<void> scheduleDailyReminder() async {
       ),
     ),
     androidAllowWhileIdle: true,
-    uiLocalNotificationDateInterpretation:
-    UILocalNotificationDateInterpretation.absoluteTime,
-    matchDateTimeComponents: null, // 🔁 No repeat — one-time only
+    uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+    matchDateTimeComponents: null,
   );
 
   print("✅ Test reminder scheduled for ${scheduledDate.hour}:${scheduledDate.minute}");
 }
 
+// Instant Local Notification
 Future<void> showLocalNotification(String title, String body) async {
-  const AndroidNotificationDetails androidPlatformChannelSpecifics =
-  AndroidNotificationDetails(
-    'request_channel_id', // Channel ID
-    'Request Notifications', // Channel name
+  const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    'request_channel_id',
+    'Request Notifications',
     importance: Importance.max,
     priority: Priority.high,
     showWhen: true,
   );
 
-  const NotificationDetails platformChannelSpecifics =
-  NotificationDetails(android: androidPlatformChannelSpecifics);
+  const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
 
   await flutterLocalNotificationsPlugin.show(
     0,
     title,
     body,
-    platformChannelSpecifics,
+    platformDetails,
   );
 }
 
-
-
 void main() async {
-
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize timezone database
-  tz.initializeTimeZones();
-
-  // Optionally set local timezone to device time zone
-  tz.initializeTimeZones();
-  // Get device timezone and set local location for tz package
-  tz.setLocalLocation(tz.getLocation('Asia/Karachi'));
-
+  // Load .env file
   await dotenv.load(fileName: "assets/.env");
+
+  // Initialize Mobile Ads
   MobileAds.instance.initialize();
 
-  String? token;
+  // Initialize timezone
+  tz.initializeTimeZones();
+  tz.setLocalLocation(tz.getLocation('Asia/Karachi'));
 
+  // Firebase Initialization
   if (kIsWeb) {
     await Firebase.initializeApp(
       options: FirebaseOptions(
@@ -109,44 +101,41 @@ void main() async {
         storageBucket: dotenv.env['STORAGE_BUCKET'] ?? '',
         messagingSenderId: dotenv.env['MESSAGING_SENDER_ID'] ?? '',
         appId: dotenv.env['APP_ID'] ?? '',
-        measurementId: dotenv.env['MEASUREMENT_ID'],
+        measurementId: dotenv.env['MEASUREMENT_ID'] ?? '',
       ),
     );
-
   } else {
     await Firebase.initializeApp();
 
-    // 🔔 Initialize local notifications
-    const AndroidInitializationSettings androidInitSettings =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
-    final InitializationSettings initSettings =
-    InitializationSettings(android: androidInitSettings);
+    // Initialize local notifications
+    const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    final InitializationSettings initSettings = InitializationSettings(android: androidInit);
     await flutterLocalNotificationsPlugin.initialize(initSettings);
 
-    // 🔔 Create notification channel
+    // Create notification channel
     await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
+    // Firebase Messaging setup
     FirebaseMessaging messaging = FirebaseMessaging.instance;
+    String? token = await messaging.getToken();
+    print('📲 FCM Token: $token');
 
-    token = await FirebaseMessaging.instance.getToken();
-    print('FCM Token: $token');
+    if (token != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('fcm_token', token);
+      print('✅ Token saved in SharedPreferences');
+    }
 
+    NotificationSettings settings = await messaging.requestPermission();
+    print('🔔 Notification permission: ${settings.authorizationStatus}');
+
+    // Register background handler
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }
 
-  NotificationSettings settings =
-  await FirebaseMessaging.instance.requestPermission();
-  print('User granted permission: ${settings.authorizationStatus}');
-
-  if (token != null) {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('fcm_token', token);
-    print('✅ FCM Token saved to SharedPreferences');
-  }
-
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  // Schedule test reminder
   await scheduleDailyReminder();
 
   runApp(const MyApp());
@@ -163,7 +152,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: SplashScreen(), // 💡 Always start at SplashScreen
+      home: SplashScreen(),
     );
   }
 }

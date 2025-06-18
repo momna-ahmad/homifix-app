@@ -1,12 +1,16 @@
 buildscript {
+    val kotlin_version by extra("2.1.0") // ✅ Add this line
+
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version") // ✅ Add this
         classpath("com.google.gms:google-services:4.4.2")
     }
 }
+
 
 allprojects {
     repositories {
@@ -29,4 +33,3 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
-

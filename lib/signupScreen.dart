@@ -88,6 +88,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       final uid = userCredential.user?.uid;
                       if (uid != null) {
                         await FirebaseFirestore.instance.collection('users').doc(uid).set({
+                          'email': emailController.text.trim(), // ✅ Add this line
                           'role': _selectedRole,
                           'createdAt': FieldValue.serverTimestamp(),
                         });

@@ -1,13 +1,15 @@
 import 'dart:async';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart'; // Add this import
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import '../services/serviceVideoPlayer.dart';
 import '../profilePage.dart';
 import 'sendOrderCustomer.dart';
+import './adminDashboard.dart';
 
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
@@ -88,7 +90,6 @@ class _LandingPageState extends State<LandingPage> {
       listener: BannerAdListener(
         onAdLoaded: (ad) {
           print('✅ Banner ad loaded successfully!');
-          //print('📏 Ad size: ${ad.size.width}x${ad.size.height}');
           if (mounted) {
             setState(() {
               _isBannerAdReady = true;
@@ -278,7 +279,6 @@ class _LandingPageState extends State<LandingPage> {
               ),
             ),
           ),
-          // Fixed: Use AdSize.banner dimensions directly instead of accessing _bannerAd!.size
           Container(
             width: AdSize.banner.width.toDouble(),
             height: AdSize.banner.height.toDouble(),
@@ -301,231 +301,256 @@ class _LandingPageState extends State<LandingPage> {
           style: TextStyle(color: Colors.black),
         ),
         iconTheme: const IconThemeData(color: Colors.black87),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.admin_panel_settings_outlined),
+            tooltip: 'Admin Dashboard',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminDashboard()),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  flex: 3,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                      hintText: "Search services...",
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: searchQuery.isNotEmpty
-                          ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          FocusScope.of(context).unfocus();
-                        },
-                      )
-                          : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
+                // Search bar and label
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        flex: 2,
+                        child: Text(
+                          "Browse Services by Category",
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                        ),
                       ),
-                      isDense: true,
-                    ),
+                      Expanded(
+                        flex: 3,
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                            hintText: "Search services...",
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: searchQuery.isNotEmpty
+                                ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                FocusScope.of(context).unfocus();
+                              },
+                            )
+                                : null,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Categories horizontal list
+                SizedBox(
+                  height: 50,
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('services').snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+
+                      final docs = snapshot.data!.docs;
+                      final categories = docs.map((doc) => doc['category']).toSet().toList();
+
+                      return ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: categories.length,
+                        itemBuilder: (context, index) {
+                          final category = categories[index];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: ElevatedButton(
+                              onPressed: () {
+                                setState(() {
+                                  if (selectedCategory == category) {
+                                    selectedCategory = null;
+                                  } else {
+                                    selectedCategory = category;
+                                  }
+                                  _searchController.clear();
+                                  searchQuery = '';
+                                });
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: selectedCategory == category ? Colors.blue : Colors.grey[300],
+                                foregroundColor: selectedCategory == category ? Colors.white : Colors.black,
+                              ),
+                              child: Text(category),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Banner Ad - Enhanced with debugging
+                _buildBannerAdWidget(),
+
+                // Services List
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: selectedCategory != null
+                        ? FirebaseFirestore.instance
+                        .collection('services')
+                        .where('category', isEqualTo: selectedCategory)
+                        .snapshots()
+                        : FirebaseFirestore.instance.collection('services').snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                      final services = snapshot.data!.docs;
+
+                      final filteredServices = services.where((service) {
+                        final data = service.data() as Map<String, dynamic>;
+                        final serviceName = (data['service'] ?? '').toString().toLowerCase();
+                        return serviceName.contains(searchQuery);
+                      }).toList();
+
+                      if (filteredServices.isEmpty) {
+                        if (searchQuery.isNotEmpty) {
+                          return const Center(child: Text("No results found."));
+                        } else if (selectedCategory != null) {
+                          return const Center(child: Text("No services found in this category."));
+                        } else {
+                          return const Center(child: Text("No services available."));
+                        }
+                      }
+
+                      return ListView.builder(
+                        itemCount: filteredServices.length,
+                        itemBuilder: (context, index) {
+                          final service = filteredServices[index];
+                          final data = service.data() as Map<String, dynamic>;
+                          final serviceName = data['service'] ?? '';
+                          final imageUrls = List<String>.from(data['imageUrls'] ?? []);
+                          final videoUrl = data['videoUrl'] ?? '';
+                          final category = data['category'] ?? '';
+                          final timing = data['timing'] ?? '';
+
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            elevation: 5,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    category,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: selectedCategory == category ? Colors.blue : Colors.black,
+                                    ),
+                                  ),
+                                  ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: const Icon(Icons.home_repair_service, color: Colors.blue),
+                                    title: highlightText(serviceName, searchQuery),
+                                    subtitle: Text("Timing: $timing"),
+                                    onTap: () {
+                                      final userId = data['userId'];
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => ProfilePage(userId: userId),
+                                        ),
+                                      );
+                                    },
+                                  ),
+
+                                  const SizedBox(height: 8),
+
+                                  // Images
+                                  if (imageUrls.isNotEmpty)
+                                    SizedBox(
+                                      height: 200,
+                                      child: PageView.builder(
+                                        itemCount: imageUrls.length,
+                                        itemBuilder: (_, i) => ClipRRect(
+                                          borderRadius: BorderRadius.circular(10),
+                                          child: Image.network(
+                                            imageUrls[i],
+                                            fit: BoxFit.cover,
+                                            width: double.infinity,
+                                            errorBuilder: (context, error, stackTrace) => Container(
+                                              color: Colors.grey[300],
+                                              child: const Icon(Icons.error),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                  // Video
+                                  if (videoUrl.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 12.0),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: SizedBox(
+                                          height: 200,
+                                          width: double.infinity,
+                                          child: ServiceVideoPlayer(videoUrl: videoUrl),
+                                        ),
+                                      ),
+                                    ),
+
+                                  const SizedBox(height: 12),
+
+                                  // Send Order Button
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: ElevatedButton.icon(
+                                      icon: const Icon(Icons.send),
+                                      label: const Text("Send Order"),
+                                      onPressed: () {
+                                        final userId = data['userId'];
+                                        final serviceId = service.id;
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => SendOrderCustomer(
+                                              userId: userId,
+                                              serviceId: serviceId,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
                   ),
                 ),
               ],
-            ),
-          ),
-
-          // Categories horizontal list
-          SizedBox(
-            height: 50,
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('services').snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
-                final docs = snapshot.data!.docs;
-                final categories = docs.map((doc) => doc['category']).toSet().toList();
-
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: List.generate(categories.length, (index) {
-                      final category = categories[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              if (selectedCategory == category) {
-                                selectedCategory = null;
-                              } else {
-                                selectedCategory = category;
-                              }
-                              _searchController.clear();
-                              searchQuery = '';
-                            });
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: selectedCategory == category ? Colors.blue : Colors.grey[300],
-                            foregroundColor: selectedCategory == category ? Colors.white : Colors.black,
-                          ),
-                          child: Text(category),
-                        ),
-                      );
-                    }),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Banner Ad - Enhanced with debugging
-          _buildBannerAdWidget(),
-
-          // Services List
-          // Services List
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: selectedCategory != null
-                  ? FirebaseFirestore.instance
-                  .collection('services')
-                  .where('category', isEqualTo: selectedCategory)
-                  .snapshots()
-                  : FirebaseFirestore.instance.collection('services').snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                final services = snapshot.data!.docs;
-
-                final filtered = services.where((service) {
-                  final serviceName = (service['service'] ?? '').toString().toLowerCase();
-                  return serviceName.contains(searchQuery);
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  if (searchQuery.isNotEmpty) {
-                    return const Center(child: Text("No results found."));
-                  } else if (selectedCategory != null) {
-                    return const Center(child: Text("No services found in this category."));
-                  } else {
-                    return const Center(child: Text("No services available."));
-                  }
-                }
-
-                return ListView.builder(
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final service = filtered[index];
-                    final data = service.data() as Map<String, dynamic>;
-                    final serviceName = data['service'] ?? '';
-                    final imageUrls = List<String>.from(data['imageUrls'] ?? []);
-                    final videoUrl = data['videoUrl'] ?? '';
-                    final category = data['category'] ?? '';
-
-
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      elevation: 5,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              category,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: selectedCategory == category ? Colors.blue : Colors.black,
-                              ),
-                            ),
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: const Icon(Icons.home_repair_service, color: Colors.blue),
-                              title: highlightText(serviceName, searchQuery),
-                              onTap: () {
-                                final userId = data['userId'];
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ProfilePage(userId: userId),
-                                  ),
-                                );
-                              },
-                            ),
-
-
-                            const SizedBox(height: 8),
-
-                            // Images
-                            if (imageUrls.isNotEmpty)
-                              SizedBox(
-                                height: 200,
-                                child: PageView.builder(
-                                  itemCount: imageUrls.length,
-                                  itemBuilder: (_, i) => ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: Image.network(
-                                      imageUrls[i],
-                                      fit: BoxFit.cover,
-                                      width: double.infinity,
-                                      errorBuilder: (context, error, stackTrace) => Container(
-                                        color: Colors.grey[300],
-                                        child: const Icon(Icons.error),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                            // Video
-                            if (videoUrl.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 12.0),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: SizedBox(
-                                    height: 200,
-                                    width: double.infinity,
-                                    child: ServiceVideoPlayer(videoUrl: videoUrl),
-                                  ),
-                                ),
-                              ),
-
-                            const SizedBox(height: 12),
-
-                            // Send Order Button
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: ElevatedButton.icon(
-                                icon: const Icon(Icons.send),
-                                label: const Text("Send Order"),
-                                onPressed: () {
-                                  final userId = data['userId'];
-                                  final serviceId = service.id; // or use any identifier you need
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => SendOrderCustomer(
-                                        userId: userId,
-                                        serviceId: serviceId,
-                                        // Add other params if needed
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
             ),
           ),
         ],
