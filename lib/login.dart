@@ -125,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (role?.toLowerCase() == 'admin') {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => const AdminDashboard()),
+            MaterialPageRoute(builder: (_) => HomeNavPage(userId: uid, role: role!)),
           );
         } else if (role?.toLowerCase() == 'professional' || role?.toLowerCase() == 'client') {
           Navigator.pushReplacement(
