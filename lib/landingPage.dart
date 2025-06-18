@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/serviceVideoPlayer.dart';
 import '../profilePage.dart';
+import 'sendOrderCustomer.dart';
 
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
@@ -237,8 +238,6 @@ class _LandingPageState extends State<LandingPage> {
                                 );
                               },
                             ),
-
-
                             const SizedBox(height: 8),
 
                             // Images
@@ -271,10 +270,36 @@ class _LandingPageState extends State<LandingPage> {
                                   ),
                                 ),
                               ),
+
+                            const SizedBox(height: 12),
+
+                            // Send Order Button
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.send),
+                                label: const Text("Send Order"),
+                                onPressed: () {
+                                  final userId = data['userId'];
+                                  final serviceId = service.id; // or use any identifier you need
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => SendOrderCustomer(
+                                        userId: userId,
+                                        serviceId: serviceId,
+                                        // Add other params if needed
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     );
+
                   },
                 );
               },
