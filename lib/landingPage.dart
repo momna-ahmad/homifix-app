@@ -126,7 +126,8 @@ class _LandingPageState extends State<LandingPage> {
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('services').snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                if (!snapshot.hasData) return const SizedBox(); // or return a placeholder Text("Loading...")
+
 
                 final docs = snapshot.data!.docs;
                 final categories = docs.map((doc) => doc['category']).toSet().toList();

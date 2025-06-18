@@ -241,7 +241,7 @@ class ProfessionalSchedule extends StatelessWidget {
                               service,
                               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.bold,
-                                color: Colors.deepPurple,
+                                color: Colors.blue.shade800,
                               ),
                               overflow: TextOverflow.ellipsis, // Prevents text overflow
                             ),
@@ -291,22 +291,32 @@ class ProfessionalSchedule extends StatelessWidget {
                       const SizedBox(height: 8),
                       // Date & Time
                       Wrap(
-                        spacing: 10,
-                        runSpacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 16, // space between date and time blocks
+                        runSpacing: 8, // vertical spacing if it wraps
                         children: [
-                          const Icon(Icons.calendar_today, size: 20, color: Colors.blueGrey),
-                          Text(
-                            'Date: $date',
-                            style: Theme.of(context).textTheme.bodyLarge,
+                          Row(
+                            children: [
+                              const Icon(Icons.calendar_today, size: 20, color: Colors.blueGrey),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Date: $date',
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                            ],
                           ),
-                          const Icon(Icons.access_time, size: 20, color: Colors.blueGrey),
-                          Text(
-                            'Time: $time',
-                            style: Theme.of(context).textTheme.bodyLarge,
+                          Row(
+                            children: [
+                              const Icon(Icons.access_time, size: 20, color: Colors.blueGrey),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Time: $time',
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                            ],
                           ),
                         ],
                       ),
+
 
                       const SizedBox(height: 8),
                       // Price
@@ -343,11 +353,15 @@ class ProfessionalSchedule extends StatelessWidget {
                               ),
                             );
                           }
-                              : null,
-                          icon: const Icon(Icons.map),
+                          : null,
+                          icon: const Icon(
+                            Icons.map,
+                            color: Colors.white,
+                          ),
+
                           label: const Text('View Route'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blueAccent,
+                            backgroundColor: Colors.blue.shade800,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

@@ -1,11 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'profilePictureUploader.dart'; // Ensure pickAndUploadImageToCloudinary() and pickedImage are defined here
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+import 'profilePictureUploader.dart';
 
 class EditProfileDialog extends StatefulWidget {
   final String userId;
-
   const EditProfileDialog({super.key, required this.userId});
 
   @override
@@ -14,12 +14,24 @@ class EditProfileDialog extends StatefulWidget {
 
 class _EditProfileDialogState extends State<EditProfileDialog> {
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _cnicController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+
   bool _loading = false;
   String? imageUrl;
+
+  final _formKey = GlobalKey<FormState>();
+
+  final cnicMaskFormatter = MaskTextInputFormatter(
+    mask: '#####-#######-#',
+    filter: {"#": RegExp(r'[0-9]')},
+    type: MaskAutoCompletionType.lazy,
+  );
 
   @override
   void initState() {
     super.initState();
+
     _loadUserData();
   }
 
@@ -28,21 +40,22 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
     final data = doc.data();
     if (data != null) {
       _nameController.text = data['name'] ?? '';
+      _cnicController.text = data['cnic'] ?? '';
+
+      final rawPhone = data['whatsapp'] ?? '';
+      _phoneController.text = rawPhone.startsWith('92')
+          ? rawPhone.substring(2) // strip the 92 prefix
+          : rawPhone;             // use as-is (assume it's already clean)
+
+
       imageUrl = data['profileImage'];
-      if (mounted) setState(() {}); // refresh UI safely
+      if (mounted) setState(() {});
     }
   }
 
   Future<void> _uploadProfileImage() async {
     setState(() => _loading = true);
-
-    final uploadedUrl = await pickAndUploadMediaToCloudinary(
-      context: context,
-      isVideo: false,
-      allowMultiple: false,
-    );
-    print('Uploaded image URL: $uploadedUrl');
-
+    final uploadedUrl = await pickAndUploadProfileImage(context);
     if (!mounted) return;
     setState(() {
       imageUrl = uploadedUrl;
@@ -51,12 +64,17 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
   }
 
   Future<void> _saveChanges() async {
+    if (!_formKey.currentState!.validate()) return;
+
     setState(() => _loading = true);
 
-    // imageUrl already updated during image pick
     await FirebaseFirestore.instance.collection('users').doc(widget.userId).update({
       'name': _nameController.text.trim(),
       'profileImage': imageUrl,
+      'cnic': _cnicController.text.trim(),
+      'whatsapp': '92${_phoneController.text.trim()}',
+
+
     });
 
     if (mounted) {
@@ -64,7 +82,6 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
       Navigator.of(context).pop();
     }
   }
-
 
   Widget _buildAvatar() {
     return GestureDetector(
@@ -77,9 +94,20 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
     );
   }
 
+  bool get isValidInputs {
+    final cnicText = _cnicController.text.trim();
+    final phoneText = _phoneController.text.trim();
+    final isValidCnic = cnicText.isEmpty || RegExp(r'^\d{5}-\d{7}-\d$').hasMatch(cnicText);
+    final isValidPhone = phoneText.isEmpty || RegExp(r'^\d{10}$').hasMatch(phoneText);
+    return isValidCnic && isValidPhone;
+  }
+
+
   @override
   void dispose() {
     _nameController.dispose();
+    _cnicController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -87,16 +115,64 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Edit Profile'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildAvatar(),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(labelText: 'Full Name'),
+      content: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.6,
           ),
-        ],
+          child: Form(
+            key: _formKey,
+            onChanged: () => setState(() {}),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildAvatar(),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(labelText: 'Full Name'),
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _cnicController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [cnicMaskFormatter],
+                  decoration: const InputDecoration(
+                    labelText: 'CNIC (e.g. 12345-6789012-3)',
+                    counterText: '',
+                  ),
+                  validator: (value) {
+                    if (value!.isEmpty) return null;
+                    return RegExp(r'^\d{5}-\d{7}-\d$').hasMatch(value)
+                        ? null
+                        : 'Invalid CNIC format';
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
+                  decoration: const InputDecoration(
+                    labelText: 'WhatsApp Number',
+                    prefixText: '92',
+                    prefixStyle: TextStyle(color: Colors.grey),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return null;
+                    return RegExp(r'^\d{10}$').hasMatch(value)
+                        ? null
+                        : 'Enter 10 digits after 92';
+                  },
+                ),
+
+              ],
+            ),
+          ),
+        ),
       ),
       actions: [
         TextButton(
@@ -104,9 +180,15 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: _loading ? null : _saveChanges,
+          onPressed: _loading || !isValidInputs
+              ? null
+              : () {
+            print("Saving...");
+            _saveChanges();
+          },
           child: const Text('Save'),
         ),
+
       ],
     );
   }

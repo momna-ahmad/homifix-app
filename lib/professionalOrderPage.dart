@@ -6,6 +6,7 @@ import 'sendServiceRequest.dart' ;
 class ProfessionalOrdersPage extends StatefulWidget {
   final String professionalId;
 
+
   const ProfessionalOrdersPage({super.key, required this.professionalId});
 
   @override
@@ -114,8 +115,11 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.work_outline, color: Colors.blueAccent),
-                              const SizedBox(width: 8),
+                              CircleAvatar(
+                                backgroundColor: Colors.blue.shade50,
+                                child: const Icon(Icons.category, color: Colors.blueAccent),
+                              ),
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
                                   data['category'] ?? 'Unknown Category',
@@ -127,6 +131,7 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
                               ),
                             ],
                           ),
+
                           const SizedBox(height: 12),
                           Text("📍 service: ${data['service'] ?? 'N/A'}"),
                           Text("📍 Location: ${data['location']['address'] ?? 'N/A'}"),
@@ -137,11 +142,12 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
                           Align(
                             alignment: Alignment.centerRight,
                             child: ElevatedButton.icon(
-                              icon: const Icon(Icons.send),
+                              icon: const Icon(Icons.send, color: Colors.white), // icon color
                               label: const Text('Send Request'),
                               onPressed: () => _showRequestDialog(order.id),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blueAccent,
+                                backgroundColor: Colors.blue.shade800,   // background color
+                                foregroundColor: Colors.white,           // text/icon color
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
                                 ),

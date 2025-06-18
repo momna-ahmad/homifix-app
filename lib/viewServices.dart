@@ -61,12 +61,16 @@ class ViewServicesPage extends StatelessWidget {
                         Expanded(
                           child: Text(
                             category,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue.shade800, // updated color
+                            ),
                           ),
                         ),
                         if (isProfessional) ...[
                           IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                            icon: Icon(Icons.edit, color: Colors.blue.shade800), // updated color
                             onPressed: () => onEdit(context, services[index]),
                           ),
                           IconButton(
@@ -74,7 +78,6 @@ class ViewServicesPage extends StatelessWidget {
                             onPressed: () => onDelete(context, services[index].id),
                           ),
                         ],
-
                       ],
                     ),
                     const SizedBox(height: 8),
