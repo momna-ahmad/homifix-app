@@ -176,12 +176,15 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
 
 
 
-class AddOrderPage extends StatelessWidget {
+class AddOrderPage extends StatefulWidget {
   final String userId;
   const AddOrderPage({required this.userId, super.key});
 
+  @override
+  State<AddOrderPage> createState() => _AddOrderPageState();
+}
 
-
+class _AddOrderPageState extends State<AddOrderPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
