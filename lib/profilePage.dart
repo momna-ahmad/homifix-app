@@ -27,7 +27,7 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  void sendBatchRequest(BuildContext context, String userId) async {
+  Future<bool> sendBatchRequest(BuildContext context, String userId) async {
     try {
       final batchRef = FirebaseFirestore.instance.collection('batch_requests');
 
