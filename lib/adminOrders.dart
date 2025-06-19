@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:csv/csv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 // Conditional imports
-import 'dart:html' as html show AnchorElement, Blob, Url;
+//import 'dart:html' as html show AnchorElement, Blob, Url;
 
 class AdminOrders extends StatefulWidget {
   @override
@@ -150,6 +150,7 @@ class _AdminOrdersState extends State<AdminOrders> {
       String csv = const ListToCsvConverter().convert(csvData);
 
       // Create and download file for web
+      /*
       final bytes = utf8.encode(csv);
       final blob = html.Blob([bytes]);
       final url = html.Url.createObjectUrlFromBlob(blob);
@@ -164,6 +165,7 @@ class _AdminOrdersState extends State<AdminOrders> {
           backgroundColor: Colors.green,
         ),
       );
+       */
     } catch (e) {
       print('Error exporting CSV: $e');
       ScaffoldMessenger.of(context).showSnackBar(

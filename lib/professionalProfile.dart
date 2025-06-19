@@ -60,6 +60,7 @@ class ProfessionalProfilePage extends StatelessWidget {
           final name = professionalData?['name'] as String? ?? 'No Name';
           final profileImageUrl = professionalData?['profileImage'] as String?;
           final createdAtTimestamp = professionalData?['createdAt'] as Timestamp?;
+          final badgeStatus = (professionalData?['badgeStatus'] as String?)?.toLowerCase() ?? '';
           final createdAt = createdAtTimestamp != null
               ? DateFormat('MMM d, yyyy - h:mm a').format(createdAtTimestamp.toDate())
               : 'N/A';
@@ -86,15 +87,46 @@ class ProfessionalProfilePage extends StatelessWidget {
                 ),
                 const SizedBox(height: 25),
 
-                // Name
-                Text(
-                  name,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple,
-                  ),
+                // Name + Badge (if assigned)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.deepPurple,
+                      ),
+                    ),
+                    if (badgeStatus == 'assigned') ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade600,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.verified, color: Colors.white, size: 20),
+                            SizedBox(width: 4),
+                            Text(
+                              'Verified',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 20),
 

@@ -2,10 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 import '../services/serviceVideoPlayer.dart';
 import '../profilePage.dart';
 import 'sendOrderCustomer.dart';
@@ -469,7 +467,6 @@ class _LandingPageState extends State<LandingPage> {
                                     contentPadding: EdgeInsets.zero,
                                     leading: const Icon(Icons.home_repair_service, color: Colors.blue),
                                     title: highlightText(serviceName, searchQuery),
-                                    subtitle: Text("Timing: $timing"),
                                     onTap: () {
                                       final userId = data['userId'];
                                       Navigator.push(

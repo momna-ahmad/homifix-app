@@ -7,6 +7,7 @@ import 'adminOrders.dart';
 import 'landingPage.dart';
 import 'professionals.dart';
 import 'customers.dart';
+import 'package:home_services_app/BadgeRequestsPage.dart' ;
 
 void logoutUser(BuildContext context) async {
   await FirebaseAuth.instance.signOut();
@@ -99,6 +100,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     const ProfessionalsPage(),
     CustomersPage(),
     AdminOrders(),
+    BadgeRequestsPage(),
   ];
 
   @override
@@ -127,6 +129,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Professionals'),
           BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Clients'),
           BottomNavigationBarItem(icon: Icon(Icons.work), label: 'Services'),
+          BottomNavigationBarItem(icon: Icon(Icons.work), label: 'Requests'),
         ],
       ),
     );
