@@ -82,8 +82,7 @@ class _ProfessionalsPageState extends State<ProfessionalsPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('All Professionals'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+        foregroundColor: Colors.black,
       ),
       body: Column(
         children: [

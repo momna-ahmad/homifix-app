@@ -2,14 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 import '../services/serviceVideoPlayer.dart';
 import '../profilePage.dart';
 import 'sendOrderCustomer.dart';
 import './adminDashboard.dart';
+
 
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
@@ -300,19 +299,6 @@ class _LandingPageState extends State<LandingPage> {
           "Explore Services",
           style: TextStyle(color: Colors.black),
         ),
-        iconTheme: const IconThemeData(color: Colors.black87),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.admin_panel_settings_outlined),
-            tooltip: 'Admin Dashboard',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AdminDashboard()),
-              );
-            },
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -469,7 +455,6 @@ class _LandingPageState extends State<LandingPage> {
                                     contentPadding: EdgeInsets.zero,
                                     leading: const Icon(Icons.home_repair_service, color: Colors.blue),
                                     title: highlightText(serviceName, searchQuery),
-                                    subtitle: Text("Timing: $timing"),
                                     onTap: () {
                                       final userId = data['userId'];
                                       Navigator.push(

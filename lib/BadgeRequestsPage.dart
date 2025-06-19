@@ -37,36 +37,43 @@ class BadgeRequestsPage extends StatelessWidget {
 
   Stream<QuerySnapshot> _pendingBadgeRequests() {
     return FirebaseFirestore.instance
-        .collection('users')
-        .where('role', isEqualTo: 'Professional')
-        .where('badgeStatus', isEqualTo: 'Pending')
+        .collection('batch_requests')
+        .where('status', isEqualTo: 'pending')
         .snapshots();
   }
 
-  Future<void> _assignBadge(String userId, BuildContext context) async {
+  Future<void> _assignBadge(String requestId, String userId, BuildContext context) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     try {
+      // 1. Update badgeStatus in users collection to "Assigned"
       await FirebaseFirestore.instance.collection('users').doc(userId).update({
-        'badgeStatus': 'Approved',
+        'badgeStatus': 'assigned',
       });
 
+      // 2. Update batch_requests status to "Assigned"
+      await FirebaseFirestore.instance.collection('batch_requests').doc(requestId).update({
+        'status': 'assigned',
+      });
+
+      // 3. Show success message
       scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: const Text('🎉 Badge has been assigned to the professional.'),
+        const SnackBar(
+          content: Text('🎉 Badge has been assigned to the professional.'),
           backgroundColor: Colors.green,
           duration: Duration(seconds: 3),
         ),
       );
 
+      // 4. Fetch FCM token and send push notification
       final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
       final fcmToken = doc.data()?['fcmToken'];
 
       if (fcmToken != null && fcmToken is String) {
         await sendPushNotification(
           customerFcmToken: fcmToken,
-          title: '🎖️ Badge Approved',
-          body: 'Congratulations! Your badge request has been approved.',
+          title: '🎖 Badge Assigned',
+          body: 'Congratulations! Your badge request has been successfully assigned.',
         );
       }
     } catch (e) {
@@ -78,6 +85,7 @@ class BadgeRequestsPage extends StatelessWidget {
       );
     }
   }
+
 
 
 
@@ -107,6 +115,7 @@ class BadgeRequestsPage extends StatelessWidget {
             itemBuilder: (context, index) {
               final doc = professionals[index];
               final data = doc.data() as Map<String, dynamic>;
+              final userId = data['userId'] ?? '';
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -117,7 +126,14 @@ class BadgeRequestsPage extends StatelessWidget {
                     children: [
                       ListTile(
                         leading: const Icon(Icons.badge),
-                        title: Text(data['name'] ?? 'No Name'),
+                        title: FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) return const Text('Loading...');
+                            final userData = snapshot.data!.data() as Map<String, dynamic>;
+                            return Text(userData['name'] ?? 'No Name');
+                          },
+                        ),
                         subtitle: const Text('Requested Badge'),
                       ),
                       const SizedBox(height: 8),
@@ -130,8 +146,7 @@ class BadgeRequestsPage extends StatelessWidget {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      ProfilePage(userId: doc.id, isAdmin: true),
+                                  builder: (_) => ProfilePage(userId: userId, isAdmin: true),
                                 ),
                               );
                             },
@@ -140,7 +155,7 @@ class BadgeRequestsPage extends StatelessWidget {
                           ElevatedButton.icon(
                             icon: const Icon(Icons.check_circle),
                             label: const Text('Assign Badge'),
-                            onPressed: () => _assignBadge(doc.id, context),
+                            onPressed: () => _assignBadge(doc.id, userId, context),
                           ),
                         ],
                       ),

@@ -34,12 +34,7 @@ class _HomeNavPageState extends State<HomeNavPage> {
         ProfessionalSchedule(userId: widget.userId),
         ProfilePage(userId: widget.userId),
       ];
-    } else if (widget.role.toLowerCase() == 'admin') {
-      _pages = [
-        const AdminDashboard(),
-        const BadgeRequestsPage(), // This must be created
-      ];
-    } else {
+    }  else {
       _pages = [
         LandingPage(),
         CustomerOrdersPage(userId: widget.userId),
@@ -82,13 +77,7 @@ class _HomeNavPageState extends State<HomeNavPage> {
             BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Job Posts'),
             BottomNavigationBarItem(icon: Icon(Icons.schedule), label: 'Schedule'),
             BottomNavigationBarItem(icon: Icon(Icons.person), label: 'My Profile'),
-          ]
-              : role == 'admin'
-              ? const [
-            BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
-            BottomNavigationBarItem(icon: Icon(Icons.verified_user), label: 'Badge Requests'),
-          ]
-              : const [
+          ] : const [
             BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Explore'),
             BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'My Orders'),
             BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
