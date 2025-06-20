@@ -46,7 +46,6 @@ class BadgeRequestsPage extends StatelessWidget {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     try {
-      // 1. Update badgeStatus in users collection to "Assigned"
       await FirebaseFirestore.instance.collection('users').doc(userId).update({
         'badgeStatus': 'assigned',
       });
@@ -65,14 +64,13 @@ class BadgeRequestsPage extends StatelessWidget {
         ),
       );
 
-      // 4. Fetch FCM token and send push notification
       final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
       final fcmToken = doc.data()?['fcmToken'];
 
       if (fcmToken != null && fcmToken is String) {
         await sendPushNotification(
           customerFcmToken: fcmToken,
-          title: '🎖️ Badge Assigned',
+          title: '🎖 Badge Assigned',
           body: 'Congratulations! Your badge request has been successfully assigned.',
         );
       }
@@ -85,7 +83,6 @@ class BadgeRequestsPage extends StatelessWidget {
       );
     }
   }
-
 
 
 

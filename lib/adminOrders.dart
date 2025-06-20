@@ -182,8 +182,7 @@ class _AdminOrdersState extends State<AdminOrders> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Admin Orders'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+        foregroundColor: Colors.black,
       ),
       body: Padding(
         padding: EdgeInsets.all(12),

@@ -9,6 +9,7 @@ import '../profilePage.dart';
 import 'sendOrderCustomer.dart';
 import './adminDashboard.dart';
 
+
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
 
@@ -298,19 +299,6 @@ class _LandingPageState extends State<LandingPage> {
           "Explore Services",
           style: TextStyle(color: Colors.black),
         ),
-        iconTheme: const IconThemeData(color: Colors.black87),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.admin_panel_settings_outlined),
-            tooltip: 'Admin Dashboard',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AdminDashboard()),
-              );
-            },
-          ),
-        ],
       ),
       body: Column(
         children: [
