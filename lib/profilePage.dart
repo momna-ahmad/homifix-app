@@ -312,16 +312,19 @@ class ProfilePage extends StatelessWidget {
                                 'badgeStatus': 'Pending',
                               });
 
-                              final success = await sendBatchRequest(context, userId);
+                              final success = await sendBatchRequest(
+                                  context, userId);
 
                               if (success) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('✅ Badge request sent.')),
+                                  const SnackBar(
+                                      content: Text('✅ Badge request sent.')),
                                 );
                               }
                             } else if (badgeStatus == 'pending') {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('⚠️ Badge request already sent and is under review.')),
+                                const SnackBar(content: Text(
+                                    '⚠️ Badge request already sent and is under review.')),
                               );
                             } else if (badgeStatus == 'assigned') {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -410,29 +413,13 @@ class ProfilePage extends StatelessWidget {
   }
 
 
-  Widget _buildProfessionalProfile(BuildContext context,
-      Map<String, dynamic> userData, String userId) {
-    final theme = Theme
-        .of(context)
-        .textTheme;
+  Widget _buildProfessionalProfile(
+      BuildContext context, Map<String, dynamic> userData, String userId) {
+    final theme = Theme.of(context).textTheme;
     final cnic = userData['cnic'] ?? 'Not Provided';
     final whatsapp = userData['whatsapp'] ?? '';
     final createdAt = userData['createdAt'] != null
-        ? (userData['createdAt'] as Timestamp).toDate().toLocal()
-        .toString()
-        .split(' ')[0]
-        : 'N/A';
-  Widget _buildProfessionalProfile(BuildContext context,
-      Map<String, dynamic> userData, String userId) {
-    final theme = Theme
-        .of(context)
-        .textTheme;
-    final cnic = userData['cnic'] ?? 'Not Provided';
-    final whatsapp = userData['whatsapp'] ?? '';
-    final createdAt = userData['createdAt'] != null
-        ? (userData['createdAt'] as Timestamp).toDate().toLocal()
-        .toString()
-        .split(' ')[0]
+        ? (userData['createdAt'] as Timestamp).toDate().toLocal().toString().split(' ')[0]
         : 'N/A';
 
     return StreamBuilder<QuerySnapshot>(
@@ -441,11 +428,11 @@ class ProfilePage extends StatelessWidget {
           .where('userId', isEqualTo: userId)
           .snapshots(),
       builder: (context, servicesSnapshot) {
-        if (!servicesSnapshot.hasData) {
+        if (servicesSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final services = servicesSnapshot.data!.docs;
+        final services = servicesSnapshot.data?.docs ?? [];
 
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
@@ -458,200 +445,190 @@ class ProfilePage extends StatelessWidget {
             final reviewDocs = reviewSnapshot.data?.docs ?? [];
 
             final averageRating = reviewDocs.isNotEmpty
-                ? reviewDocs.map((doc) => (doc['rating'] ?? 0) as num).reduce((
-                a, b) => a + b) / reviewDocs.length
+                ? reviewDocs
+                .map((doc) => (doc['rating'] ?? 0) as num)
+                .reduce((a, b) => a + b) /
+                reviewDocs.length
                 : 0.0;
 
             final recentReviews = reviewDocs.take(3).toList();
 
-            return _buildProfileBase(context, userData, theme, children: [
-              const Divider(height: 32, thickness: 1.5),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.calendar_today, color: Colors.blueAccent),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Member Since: $createdAt',
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text('CNIC: $cnic', style: theme.bodyMedium),
-              const SizedBox(height: 8),
-              ElevatedButton.icon(
-                onPressed: whatsapp.isNotEmpty
-                    ? () async {
-                  final uri = Uri.parse('https://wa.me/$whatsapp');
-                  if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Could not open WhatsApp')),
-                    );
-                  }
-                }
-                    : null,
-                icon: const Icon(Icons.message_rounded),
-                label: Text(whatsapp.isNotEmpty
-                    ? 'Contact on WhatsApp'
-                    : 'WhatsApp Not Provided'),
-              ),
-              const Divider(height: 32, thickness: 1.5),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Services Providing:',
-                  style: theme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (services.isEmpty)
-                const Text('No services added by this professional.')
-              else
-                ListView.separated(
-                  physics: const NeverScrollableScrollPhysics(),
-                  shrinkWrap: true,
-                  itemCount: services.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final service = services[index].data() as Map<
-                        String,
-                        dynamic>;
-                    return Card(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius
-                          .circular(12)),
-                      elevation: 4,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              service['service'] ?? 'Unknown Service',
-                              style: theme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: Colors.blue.shade800,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text('Category: ${service['category'] ?? 'N/A'}'),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Added on: ${service['createdAt'] != null
-                                  ? (service['createdAt'] as Timestamp).toDate()
-                                  .toLocal().toString()
-                                  .split('.')[0]
-                                  : 'N/A'}',
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              const Divider(height: 32, thickness: 1.5),
-              if (reviewDocs.isNotEmpty) ...[
+            return _buildProfileBase(
+              context,
+              userData,
+              theme,
+              children: [
+                const Divider(height: 32, thickness: 1.5),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.star, color: Colors.orange),
-                    const SizedBox(width: 6),
+                    const Icon(Icons.calendar_today, color: Colors.blueAccent),
+                    const SizedBox(width: 10),
                     Text(
-                      'Average Rating: ${averageRating.toStringAsFixed(1)}',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600),
+                      'Member Since: $createdAt',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
-                ...recentReviews.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final rating = (data['rating'] ?? 0).toDouble();
-                  final text = data['reviewText'] ?? '';
-                  final customerId = data['customerId'];
-
-                  return FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance.collection('users').doc(
-                        customerId).get(),
-                    builder: (context, snapshot) {
-                      final reviewerName = (snapshot.data?.data() as Map<
-                          String,
-                          dynamic>?)?['name'] ?? 'Anonymous';
+                const SizedBox(height: 12),
+                Text('CNIC: $cnic', style: theme.bodyMedium),
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  onPressed: whatsapp.isNotEmpty
+                      ? () async {
+                    final uri = Uri.parse('https://wa.me/$whatsapp');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Could not open WhatsApp')),
+                      );
+                    }
+                  }
+                      : null,
+                  icon: const Icon(Icons.message_rounded),
+                  label: Text(
+                    whatsapp.isNotEmpty ? 'Contact on WhatsApp' : 'WhatsApp Not Provided',
+                  ),
+                ),
+                const Divider(height: 32, thickness: 1.5),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Services Providing:',
+                    style: theme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (services.isEmpty)
+                  const Text('No services added by this professional.')
+                else
+                  ListView.separated(
+                    physics: const NeverScrollableScrollPhysics(),
+                    shrinkWrap: true,
+                    itemCount: services.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final service = services[index].data() as Map<String, dynamic>;
+                      final serviceName = service['service'] ?? 'Unknown Service';
+                      final serviceCategory = service['category'] ?? 'N/A';
+                      final serviceCreatedAt = service['createdAt'] != null
+                          ? (service['createdAt'] as Timestamp).toDate().toLocal().toString().split('.')[0]
+                          : 'N/A';
 
                       return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        child: ListTile(
-                          title: Text(reviewerName),
-                          subtitle: Column(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 4,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  ...List.generate(
-                                    rating.floor(),
-                                        (_) =>
-                                    const Icon(Icons.star, size: 16,
-                                        color: Colors.orange),
-                                  ),
-                                  if (rating - rating.floor() >= 0.5)
-                                    const Icon(Icons.star_half, size: 16,
-                                        color: Colors.orange),
-                                ],
+                              Text(
+                                serviceName,
+                                style: theme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue.shade800,
+                                ),
                               ),
+                              const SizedBox(height: 6),
+                              Text('Category: $serviceCategory'),
                               const SizedBox(height: 4),
-                              Text(text),
+                              Text('Added on: $serviceCreatedAt'),
                             ],
                           ),
                         ),
                       );
                     },
-                  );
-                }),
-
-              ] else
-                const Text(
-                    'No reviews yet.', style: TextStyle(color: Colors.grey)),
-              const Divider(height: 32, thickness: 1.5),
-              FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance.collection('users').doc(
-                    userId).get(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const SizedBox();
-
-                  final data = snapshot.data!.data() as Map<String, dynamic>;
-                  final badgeStatus = data['badgeStatus'] ?? 'None';
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                const Divider(height: 32, thickness: 1.5),
+                if (reviewDocs.isNotEmpty) ...[
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          const Icon(
-                              Icons.verified_user, color: Colors.blueGrey),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Badge Status: ${badgeStatus[0]
-                                .toUpperCase()}${badgeStatus.substring(1)}',
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w600),
-                          ),
-                        ],
+                      const Icon(Icons.star, color: Colors.orange),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Average Rating: ${averageRating.toStringAsFixed(1)}',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(height: 12),
-                      if (badgeStatus == 'Pending')
-                        const Text('Your badge request is under review.',
-                            style: TextStyle(color: Colors.orange)),
-                      if (badgeStatus == 'Assigned')
-                        const Text('You are a verified professional!',
-                            style: TextStyle(color: Colors.green)),
                     ],
-                  );
-                },
-              ),
+                  ),
+                  const SizedBox(height: 12),
+                  ...recentReviews.map((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    final rating = (data['rating'] ?? 0).toDouble();
+                    final text = data['reviewText'] ?? '';
+                    final customerId = data['customerId'] ?? '';
 
-            ]);
+                    return FutureBuilder<DocumentSnapshot>(
+                      future: FirebaseFirestore.instance.collection('users').doc(customerId).get(),
+                      builder: (context, snapshot) {
+                        final reviewerName =
+                            (snapshot.data?.data() as Map<String, dynamic>?)?['name'] ?? 'Anonymous';
+
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 6),
+                          child: ListTile(
+                            title: Text(reviewerName),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    ...List.generate(
+                                      rating.floor(),
+                                          (_) => const Icon(Icons.star, size: 16, color: Colors.orange),
+                                    ),
+                                    if (rating - rating.floor() >= 0.5)
+                                      const Icon(Icons.star_half, size: 16, color: Colors.orange),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(text),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  }).toList(),
+                ] else
+                  const Text('No reviews yet.', style: TextStyle(color: Colors.grey)),
+                const Divider(height: 32, thickness: 1.5),
+                FutureBuilder<DocumentSnapshot>(
+                  future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return const SizedBox();
+
+                    final data = snapshot.data!.data() as Map<String, dynamic>;
+                    final badgeStatus = (data['badgeStatus'] ?? 'None').toString();
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.verified_user, color: Colors.blueGrey),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Badge Status: ${badgeStatus[0].toUpperCase()}${badgeStatus.substring(1)}',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (badgeStatus.toLowerCase() == 'pending')
+                          const Text('Your badge request is under review.',
+                              style: TextStyle(color: Colors.orange)),
+                        if (badgeStatus.toLowerCase() == 'assigned')
+                          const Text('You are a verified professional!',
+                              style: TextStyle(color: Colors.green)),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            );
           },
         );
       },
@@ -659,93 +636,94 @@ class ProfilePage extends StatelessWidget {
   }
 
 
-  Widget _buildProfileBase(BuildContext context,
-      Map<String, dynamic> userData,
-      TextTheme theme, {
-        required List<Widget> children,
-      }) {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final profileImage = userData['profileImage'];
-    final role = userData['role']?.toString().toLowerCase();
-    final badgeStatus = userData['badgeStatus']?.toString().toLowerCase();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          GestureDetector(
-            onTap: () {
-              if (profileImage != null && profileImage
-                  .toString()
-                  .isNotEmpty) {
-                showDialog(
-                  context: context,
-                  builder: (_) =>
-                      Dialog(
-                        backgroundColor: Colors.transparent,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: PhotoView(
-                            imageProvider: NetworkImage(profileImage),
-                            backgroundDecoration: const BoxDecoration(
-                                color: Colors.transparent),
+  Widget _buildProfileBase(BuildContext context,
+        Map<String, dynamic> userData,
+        TextTheme theme, {
+          required List<Widget> children,
+        }) {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      final profileImage = userData['profileImage'];
+      final role = userData['role']?.toString().toLowerCase();
+      final badgeStatus = userData['badgeStatus']?.toString().toLowerCase();
+
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            GestureDetector(
+              onTap: () {
+                if (profileImage != null && profileImage
+                    .toString()
+                    .isNotEmpty) {
+                  showDialog(
+                    context: context,
+                    builder: (_) =>
+                        Dialog(
+                          backgroundColor: Colors.transparent,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: PhotoView(
+                              imageProvider: NetworkImage(profileImage),
+                              backgroundDecoration: const BoxDecoration(
+                                  color: Colors.transparent),
+                            ),
                           ),
                         ),
-                      ),
-                );
-              }
-            },
-            child: Stack(
-              children: [
-                CircleAvatar(
-                  radius: 40,
-                  backgroundColor: Colors.grey.shade300,
-                  backgroundImage: (profileImage
-                      ?.toString()
-                      .isNotEmpty ?? false)
-                      ? NetworkImage(profileImage) as ImageProvider
-                      : null,
-                  child: (profileImage == null || profileImage
-                      .toString()
-                      .isEmpty)
-                      ? const Icon(Icons.person, size: 40)
-                      : null,
-                ),
-                // ⭐ Verified star badge
-                if (role == 'professional' && badgeStatus == 'assigned')
-                  const Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: CircleAvatar(
-                      backgroundColor: Colors.white,
-                      radius: 12,
-                      child: Icon(Icons.star, color: Colors.amber, size: 20),
-                    ),
+                  );
+                }
+              },
+              child: Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundColor: Colors.grey.shade300,
+                    backgroundImage: (profileImage
+                        ?.toString()
+                        .isNotEmpty ?? false)
+                        ? NetworkImage(profileImage) as ImageProvider
+                        : null,
+                    child: (profileImage == null || profileImage
+                        .toString()
+                        .isEmpty)
+                        ? const Icon(Icons.person, size: 40)
+                        : null,
                   ),
-              ],
+                  // ⭐ Verified star badge
+                  if (role == 'professional' && badgeStatus == 'assigned')
+                    const Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: CircleAvatar(
+                        backgroundColor: Colors.white,
+                        radius: 12,
+                        child: Icon(Icons.star, color: Colors.amber, size: 20),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            userData['name'] ?? 'No Name',
-            style: theme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          if (currentUser?.uid == userData['uid'])
+            const SizedBox(height: 16),
             Text(
-              currentUser?.email ?? 'No Email',
-              style: theme.bodyMedium?.copyWith(color: Colors.grey[700]),
+              userData['name'] ?? 'No Name',
+              style: theme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
             ),
-          const SizedBox(height: 4),
-          Text(
-            'Role: ${userData['role'] ?? 'N/A'}',
-            style: theme.bodySmall?.copyWith(color: Colors.grey[700]),
-          ),
-          ...children,
-        ],
-      ),
-    );
+            const SizedBox(height: 8),
+            if (currentUser?.uid == userData['uid'])
+              Text(
+                currentUser?.email ?? 'No Email',
+                style: theme.bodyMedium?.copyWith(color: Colors.grey[700]),
+              ),
+            const SizedBox(height: 4),
+            Text(
+              'Role: ${userData['role'] ?? 'N/A'}',
+              style: theme.bodySmall?.copyWith(color: Colors.grey[700]),
+            ),
+            ...children,
+          ],
+        ),
+      );
+    }
   }
-}
