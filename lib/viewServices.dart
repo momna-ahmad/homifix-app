@@ -58,22 +58,6 @@ class ViewServicesPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Welcome, Parsley Montana 👋',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E293B),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Find the best cleaning services in your city',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
                   const SizedBox(height: 20),
 
                   // Promo Card
@@ -103,7 +87,7 @@ class ViewServicesPage extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                '25% OFF',
+                                'Earn Now',
                                 style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
@@ -111,7 +95,7 @@ class ViewServicesPage extends StatelessWidget {
                                 ),
                               ),
                               const Text(
-                                'On home services',
+                                'Find Orders anywhere',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.white70,
@@ -128,7 +112,7 @@ class ViewServicesPage extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: const Text(
-                                  'BOOK NOW',
+                                  'Add Services',
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
@@ -140,41 +124,12 @@ class ViewServicesPage extends StatelessWidget {
                           ),
                         ),
                         const Icon(
-                          Icons.cleaning_services,
+                          Icons.home,
                           size: 60,
                           color: Colors.white30,
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Categories Section
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Categories',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E293B),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildCategoryItem(Icons.cleaning_services, 'Cleaning', const Color(0xFF22D3EE)),
-                      _buildCategoryItem(Icons.build, 'Repair', const Color(0xFF8B5CF6)),
-                      _buildCategoryItem(Icons.palette, 'Painting', const Color(0xFFEC4899)),
-                      _buildCategoryItem(Icons.local_laundry_service, 'Laundry', const Color(0xFF10B981)),
-                      _buildCategoryItem(Icons.more_horiz, 'Plus', const Color(0xFF64748B)),
-                    ],
                   ),
                 ],
               ),
@@ -189,7 +144,7 @@ class ViewServicesPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Top Services',
+                    'Your Services',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'main.dart' ;
+import 'main.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 const String notificationApiUrl = 'http://10.0.2.2:5000/send-notification';
-
 
 Future<void> sendPushNotification({
   required String customerFcmToken,
@@ -38,20 +37,34 @@ Future<void> sendPushNotification({
 class RequestService {
   static Future<void> sendRequest({
     required BuildContext context,
-    required String professionalId, // ID of the professional sending the request
-    required String orderId,        // ID of the order being requested
+    required String professionalId,
+    required String orderId,
     required String price,
     required String message,
   }) async {
     if (price.isEmpty || message.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("All fields are required")),
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.warning, color: Colors.white),
+              SizedBox(width: 12),
+              Text("All fields are required"),
+            ],
+          ),
+          backgroundColor: const Color(0xFFF59E0B),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
       );
       return;
     }
 
     try {
-      // --- Step 1: Check if the request has already been sent by this professional for this order ---
+      // Check if request already sent
       final professionalUserRef = FirebaseFirestore.instance.collection('users').doc(professionalId);
       final professionalSnapshot = await professionalUserRef.get();
 
@@ -61,57 +74,108 @@ class RequestService {
 
         if (requestsSent.contains(orderId)) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ You have already sent a request for this order.'),
-              backgroundColor: Colors.orange, // Highlight warning
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.info, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text('You have already sent a request for this order.'),
+                ],
+              ),
+              backgroundColor: const Color(0xFFF59E0B),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              margin: const EdgeInsets.all(16),
             ),
           );
-          return; // Stop execution if request already exists
+          return;
         }
-      } else {
-        // Handle case where professional user document doesn't exist (though it should for logged-in users)
-        print('Warning: Professional user document not found for ID: $professionalId');
-        // You might decide to return or proceed, but it's an unusual state.
-        // For robustness, we'll proceed as if they just haven't sent any requests yet.
       }
 
-
-      // --- Step 2: If not already sent, proceed with sending the request ---
+      // Send the request
       final request = {
         'professionalId': professionalId,
         'price': price,
         'message': message,
         'status': 'pending',
-        'timestamp': DateTime.now().toIso8601String(), // Use server timestamp for accuracy
+        'timestamp': DateTime.now().toIso8601String(),
       };
 
-      // Update the Order Document
       final orderRef = FirebaseFirestore.instance.collection('orders').doc(orderId);
+
+      // Perform Firestore operations
       await orderRef.update({
         'applications': FieldValue.arrayUnion([request]),
       });
 
-      // Update the Professional's User Document (add orderId to requestsSent)
-      // This update will only happen if the check above passed.
       await professionalUserRef.update({
-        'requestsSent': FieldValue.arrayUnion([orderId]), // Add the orderId to the array
+        'requestsSent': FieldValue.arrayUnion([orderId]),
       });
 
+      // Show success SnackBar immediately after Firestore operations complete
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ Request sent successfully')),
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 12),
+              Text('Request sent successfully'),
+            ],
+          ),
+          backgroundColor: const Color(0xFF10B981),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
       );
 
+      // Handle notifications asynchronously in the background
+      _handleNotificationsAsync(orderId, orderRef);
+
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Error sending request: $e')),
+            ],
+          ),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+      print('Error sending request: $e');
+      rethrow; // Re-throw to handle in the dialog
+    }
+  }
+
+  // Handle notifications asynchronously to avoid blocking the UI
+  static void _handleNotificationsAsync(String orderId, DocumentReference orderRef) async {
+    try {
+      // Send local notification
       await showLocalNotification(
         'Request Sent',
         'Your request has been sent successfully!',
       );
 
-      // Step 3: Send push notification to customer
+      // Send push notification to customer
       final orderSnapshot = await orderRef.get();
-      final customerId = orderSnapshot.data()?['customerId'];
+      final orderData = orderSnapshot.data() as Map<String, dynamic>?;
+      final customerId = orderData?['customerId'];
       if (customerId != null) {
         final customerDoc = await FirebaseFirestore.instance.collection('users').doc(customerId).get();
-        final customerFcmToken = customerDoc.data()?['fcmToken'];
+        final customerData = customerDoc.data() as Map<String, dynamic>?;
+        final customerFcmToken = customerData?['fcmToken'];
         if (customerFcmToken != null && customerFcmToken is String) {
           await sendPushNotification(
             customerFcmToken: customerFcmToken,
@@ -120,17 +184,12 @@ class RequestService {
           );
         }
       }
-
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error sending request: $e')),
-      );
-      print('Error sending request: $e'); // For debugging
+      print('Error sending notifications: $e');
+      // Don't show error to user since the main operation (sending request) was successful
     }
   }
 }
-
-
 
 class SendRequestDialog extends StatefulWidget {
   final String orderId;
@@ -157,59 +216,256 @@ class _SendRequestDialogState extends State<SendRequestDialog> {
 
     setState(() => _loading = true);
 
-    await RequestService.sendRequest(
-      context: context,
-      professionalId: widget.professionalId,
-      orderId: widget.orderId,
-      price: price,
-      message: message,
-    );
+    try {
+      await RequestService.sendRequest(
+        context: context,
+        professionalId: widget.professionalId,
+        orderId: widget.orderId,
+        price: price,
+        message: message,
+      );
 
-    setState(() => _loading = false);
-    Navigator.pop(context);
+      // Close modal immediately after successful Firestore operations
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      // Only reset loading state if there was an error
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      title: const Text("Send Request"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: priceController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Price',
-              prefixIcon: Icon(Icons.attach_money),
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(16),
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+          maxWidth: MediaQuery.of(context).size.width * 0.9,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              spreadRadius: 0,
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
+          ],
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0EA5E9).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.send,
+                      color: Color(0xFF0EA5E9),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Text(
+                      'Send Request',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Price Input
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFE2E8F0),
+                    width: 1,
+                  ),
+                ),
+                child: TextField(
+                  controller: priceController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(
+                    color: Color(0xFF1E293B),
+                    fontSize: 16,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Your Price Offer',
+                    labelStyle: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 14,
+                    ),
+                    prefixIcon: Container(
+                      padding: const EdgeInsets.all(12),
+                      child: const Icon(
+                        Icons.attach_money,
+                        color: Color(0xFF0EA5E9),
+                        size: 20,
+                      ),
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Message Input
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFE2E8F0),
+                    width: 1,
+                  ),
+                ),
+                child: TextField(
+                  controller: messageController,
+                  maxLines: 3,
+                  style: const TextStyle(
+                    color: Color(0xFF1E293B),
+                    fontSize: 16,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Message to Customer',
+                    labelStyle: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 14,
+                    ),
+                    prefixIcon: Container(
+                      padding: const EdgeInsets.all(12),
+                      child: const Icon(
+                        Icons.message,
+                        color: Color(0xFF0EA5E9),
+                        size: 20,
+                      ),
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Action Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: const Color(0xFFE2E8F0),
+                          width: 1,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: TextButton(
+                        onPressed: _loading ? null : () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0EA5E9),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF0EA5E9).withOpacity(0.3),
+                            spreadRadius: 0,
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: TextButton(
+                        onPressed: _loading ? null : _submitRequest,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _loading
+                            ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                            : const Text(
+                          'Send Request',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          TextField(
-            controller: messageController,
-            decoration: const InputDecoration(
-              labelText: 'Message',
-              prefixIcon: Icon(Icons.message),
-            ),
-          ),
-        ],
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: _loading ? null : _submitRequest,
-          child: _loading
-              ? const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
-              : const Text('Send'),
-        ),
-      ],
     );
+  }
+
+  @override
+  void dispose() {
+    priceController.dispose();
+    messageController.dispose();
+    super.dispose();
   }
 }
