@@ -82,25 +82,24 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _navigateToRoleScreen(String uid, String? role) {
-    if (role?.toLowerCase() == 'admin') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AdminDashboard()),
-      );
-    } else if (role?.toLowerCase() == 'professional' || role?.toLowerCase() == 'client') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => HomeNavPage(userId: uid, role: role!)),
-      );
-    } else {
+    if (role == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Unknown role: $role'),
+        const SnackBar(
+          content: Text('User role is missing.'),
           backgroundColor: Colors.red,
         ),
       );
+      return;
     }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => HomeNavPage(userId: uid, role: role),
+      ),
+    );
   }
+
 
   void _loginUser() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -123,7 +122,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final role = await _authService.getUserRole(uid!);
 
-      // Save FCM token to Firestore after login
+      if (role == null || role.isEmpty) {
+        setState(() {
+          _errorMessage = "User role is missing.";
+        });
+        return;
+      }
+
       try {
         final fcmToken = await FirebaseMessaging.instance.getToken();
         if (fcmToken != null) {
@@ -136,10 +141,9 @@ class _LoginScreenState extends State<LoginScreen> {
         print("⚠️ Failed to update FCM token: $e");
       }
 
-      // Store user data in SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('uid', uid);
-      await prefs.setString('role', role ?? '');
+      await prefs.setString('role', role);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -149,7 +153,8 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
 
-      _showInterstitialAdAndNavigate(uid, role);
+      _showInterstitialAdAndNavigate(uid, role); // ✅ Only one navigation call here
+
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
@@ -160,6 +165,9 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     }
   }
+
+
+
 
   @override
   void dispose() {
