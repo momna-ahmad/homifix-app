@@ -7,6 +7,10 @@ import 'landingPage.dart';
 import 'professionalSchedule.dart';
 import 'customerHistory.dart';
 import 'professionalProfile.dart';
+import 'adminDashboard.dart';
+import 'users.dart';
+import 'badgeRequestsPage.dart';
+import 'adminOrders.dart';
 
 class HomeNavPage extends StatefulWidget {
   final String userId;
@@ -25,21 +29,31 @@ class _HomeNavPageState extends State<HomeNavPage> {
   @override
   void initState() {
     super.initState();
+    final role = widget.role.toLowerCase();
 
-    if (widget.role.toLowerCase() == 'professional') {
+    if (role == 'professional') {
       _pages = [
         AddServicesPage(userId: widget.userId, role: widget.role),
         ProfessionalOrdersPage(professionalId: widget.userId),
         ProfessionalSchedule(userId: widget.userId),
         ProfessionalProfile(userId: widget.userId),
       ];
-    } else {
+    } else if (role == 'client') {
       _pages = [
         LandingPage(),
         CustomerOrdersPage(userId: widget.userId),
         ProfilePage(userId: widget.userId),
         CustomerHistoryPage(userId: widget.userId),
       ];
+    } else if (role == 'admin') {
+      _pages = [
+        AdminDashboard(),
+        UserSchedule(userId: widget.userId),
+        AdminOrders(),
+        BadgeRequestsPage(),
+      ];
+    } else {
+      _pages = [const Center(child: Text("Unknown role"))];
     }
   }
 
@@ -52,170 +66,111 @@ class _HomeNavPageState extends State<HomeNavPage> {
   @override
   Widget build(BuildContext context) {
     final role = widget.role.toLowerCase();
-
     return Scaffold(
       backgroundColor: const Color(0xFFF0F9FF),
       body: IndexedStack(
         index: _selectedIndex,
         children: _pages,
       ),
-      extendBody: false,
-      bottomNavigationBar: Container(
-        height: 100, // Increased height to accommodate the bubble
-        color: const Color(0xFFF0F9FF), // Match background color
-        child: Stack(
-          children: [
-            // Main navbar container
-            Positioned(
-              bottom: 20,
-              left: 16,
-              right: 16,
-              child: Container(
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF22D3EE).withOpacity(0.1),
-                      spreadRadius: 0,
-                      blurRadius: 20,
-                      offset: const Offset(0, -5),
-                    ),
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      spreadRadius: 0,
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: List.generate(4, (index) {
-                    final isSelected = index == _selectedIndex;
+      bottomNavigationBar: _buildBottomNavBar(role),
+    );
+  }
 
-                    IconData icon;
-                    String label;
+  Widget _buildBottomNavBar(String role) {
+    int tabCount = _pages.length;
 
-                    if (role == 'professional') {
-                      switch (index) {
-                        case 0:
-                          icon = Icons.home_repair_service_rounded;
-                          label = 'Services';
-                          break;
-                        case 1:
-                          icon = Icons.work_rounded;
-                          label = 'Jobs';
-                          break;
-                        case 2:
-                          icon = Icons.calendar_today_rounded;
-                          label = 'Schedule';
-                          break;
-                        default:
-                          icon = Icons.person_rounded;
-                          label = 'Profile';
-                      }
-                    } else {
-                      switch (index) {
-                        case 0:
-                          icon = Icons.home_rounded;
-                          label = 'Home';
-                          break;
-                        case 1:
-                          icon = Icons.shopping_bag_rounded;
-                          label = 'Orders';
-                          break;
-                        case 2:
-                          icon = Icons.person_rounded;
-                          label = 'Profile';
-                          break;
-                        default:
-                          icon = Icons.history_rounded;
-                          label = 'History';
-                      }
-                    }
+    return Container(
+      height: 100,
+      color: const Color(0xFFF0F9FF),
+      child: Stack(
+        children: [
+          Positioned(
+            bottom: 20,
+            left: 16,
+            right: 16,
+            child: Container(
+              height: 60,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF22D3EE).withOpacity(0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, -5),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(tabCount, (index) {
+                  final isSelected = index == _selectedIndex;
+                  final icon = _getSelectedIcon(role, index);
+                  final label = _getSelectedLabel(role, index);
 
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => _onItemTapped(index),
-                        child: Container(
-                          height: 60,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Only show icon and label for non-selected items
-                              if (!isSelected) ...[
-                                Icon(
-                                  icon,
-                                  color: const Color(0xFF64748B),
-                                  size: 20,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  label,
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => _onItemTapped(index),
+                      child: SizedBox(
+                        height: 60,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (!isSelected) ...[
+                              Icon(icon, color: const Color(0xFF64748B), size: 20),
+                              const SizedBox(height: 4),
+                              Text(label,
                                   style: const TextStyle(
-                                    color: Color(0xFF64748B),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
+                                      color: Color(0xFF64748B),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500)),
                             ],
-                          ),
+                          ],
                         ),
                       ),
-                    );
-                  }),
-                ),
+                    ),
+                  );
+                }),
               ),
             ),
-
-            // Floating bubble for selected item
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-              bottom: 30, // Position above the navbar
-              left: 16 + (MediaQuery.of(context).size.width - 32) / 4 * _selectedIndex +
-                  (MediaQuery.of(context).size.width - 32) / 8 - 30, // Center the bubble
-              child: Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF22D3EE),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF22D3EE).withOpacity(0.3),
-                      spreadRadius: 0,
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      _getSelectedIcon(role, _selectedIndex),
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _getSelectedLabel(role, _selectedIndex),
+          ),
+          // Bubble animation
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            bottom: 30,
+            left: 16 +
+                (MediaQuery.of(context).size.width - 32) / tabCount * _selectedIndex +
+                (MediaQuery.of(context).size.width - 32) / tabCount / 2 -
+                30,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: const BoxDecoration(
+                color: Color(0xFF22D3EE),
+                shape: BoxShape.circle,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(_getSelectedIcon(role, _selectedIndex),
+                      color: Colors.white, size: 22),
+                  const SizedBox(height: 2),
+                  Text(_getSelectedLabel(role, _selectedIndex),
                       style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 8,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w600)),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -223,17 +178,37 @@ class _HomeNavPageState extends State<HomeNavPage> {
   IconData _getSelectedIcon(String role, int index) {
     if (role == 'professional') {
       switch (index) {
-        case 0: return Icons.home_repair_service_rounded;
-        case 1: return Icons.work_rounded;
-        case 2: return Icons.calendar_today_rounded;
-        default: return Icons.person_rounded;
+        case 0:
+          return Icons.home_repair_service_rounded;
+        case 1:
+          return Icons.work_rounded;
+        case 2:
+          return Icons.calendar_today_rounded;
+        default:
+          return Icons.person_rounded;
+      }
+    } else if (role == 'admin') {
+      switch (index) {
+        case 0:
+          return Icons.dashboard;
+        case 1:
+          return Icons.people_alt_rounded;
+        case 2:
+          return Icons.shopping_cart_rounded;
+        default:
+          return Icons.verified_rounded;
       }
     } else {
+      // client
       switch (index) {
-        case 0: return Icons.home_rounded;
-        case 1: return Icons.shopping_bag_rounded;
-        case 2: return Icons.person_rounded;
-        default: return Icons.history_rounded;
+        case 0:
+          return Icons.home_rounded;
+        case 1:
+          return Icons.shopping_bag_rounded;
+        case 2:
+          return Icons.person_rounded;
+        default:
+          return Icons.history_rounded;
       }
     }
   }
@@ -241,17 +216,36 @@ class _HomeNavPageState extends State<HomeNavPage> {
   String _getSelectedLabel(String role, int index) {
     if (role == 'professional') {
       switch (index) {
-        case 0: return 'Services';
-        case 1: return 'Jobs';
-        case 2: return 'Schedule';
-        default: return 'Profile';
+        case 0:
+          return 'Services';
+        case 1:
+          return 'Jobs';
+        case 2:
+          return 'Schedule';
+        default:
+          return 'Profile';
+      }
+    } else if (role == 'admin') {
+      switch (index) {
+        case 0:
+          return 'Dashboard';
+        case 1:
+          return 'Users';
+        case 2:
+          return 'Orders';
+        default:
+          return 'Badges';
       }
     } else {
       switch (index) {
-        case 0: return 'Home';
-        case 1: return 'Orders';
-        case 2: return 'Profile';
-        default: return 'History';
+        case 0:
+          return 'Home';
+        case 1:
+          return 'Orders';
+        case 2:
+          return 'Profile';
+        default:
+          return 'History';
       }
     }
   }

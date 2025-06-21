@@ -151,12 +151,15 @@ class MyApp extends StatelessWidget {
       title: 'Home Services App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        scaffoldBackgroundColor: Color(0xFF3A3A3A),
+        scaffoldBackgroundColor: Color(0xFFF0F9FF), // Light blue background
         appBarTheme: AppBarTheme(
-          backgroundColor: Color(0xFF3A3A3A),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
         ),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFF3A3A3A),
+          backgroundColor: Colors.white,
+          selectedItemColor: Color(0xFF0EA5E9),
+          unselectedItemColor: Colors.grey,
         ),
       ),
       home: SplashScreen(),

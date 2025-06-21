@@ -22,6 +22,7 @@ dependencies:
   url_launcher: ^6.2.5
   mask_text_input_formatter: ^2.5.0
   fl_chart: ^0.64.0
+  share_plus: ^11.0.0
 
 
   # Firebase
@@ -68,7 +69,6 @@ flutter:
   assets:
     - assets/.env
     - assets/app_icon.jpg
-    - assets/loginImage.jpeg
 
 flutter_launcher_icons:
   android: true
