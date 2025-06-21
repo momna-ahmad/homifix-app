@@ -147,10 +147,17 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+
       title: 'Home Services App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        scaffoldBackgroundColor: Color(0xFF3A3A3A),
+        appBarTheme: AppBarTheme(
+          backgroundColor: Color(0xFF3A3A3A),
+        ),
+        bottomNavigationBarTheme: BottomNavigationBarThemeData(
+          backgroundColor: Color(0xFF3A3A3A),
+        ),
       ),
       home: SplashScreen(),
     );

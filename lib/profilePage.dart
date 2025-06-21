@@ -27,38 +27,7 @@ class ProfilePage extends StatelessWidget {
     );
   }
 
-  Future<bool> sendBatchRequest(BuildContext context, String userId) async {
-    try {
-      final batchRef = FirebaseFirestore.instance.collection('batch_requests');
 
-      // Check if there's already a pending request
-      final existing = await batchRef
-          .where('userId', isEqualTo: userId)
-          .where('status', isEqualTo: 'pending')
-          .get();
-
-      if (existing.docs.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('You already have a pending badge request.')),
-        );
-        return false;
-      }
-
-      await batchRef.add({
-        'userId': userId,
-        'status': 'pending',
-        'requestedAt': Timestamp.now(),
-      });
-
-      return true;
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error sending batch request: $e')),
-      );
-      return false;
-    }
-  }
 
 
   void _showReportDialog(BuildContext context, String professionalId) {
@@ -285,62 +254,7 @@ class ProfilePage extends StatelessWidget {
                         return const SizedBox();
                       },
                     ),
-                  if (isCurrentUser && role == 'professional')
-                    FutureBuilder<DocumentSnapshot>(
-                      future: FirebaseFirestore.instance.collection('users')
-                          .doc(userId)
-                          .get(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData || !snapshot.data!.exists)
-                          return const SizedBox();
 
-                        final data = snapshot.data!.data() as Map<
-                            String,
-                            dynamic>;
-                        final badgeStatus = (data['badgeStatus'] ?? 'None')
-                            .toString()
-                            .toLowerCase();
-
-                        return IconButton(
-                          icon: const Icon(
-                              Icons.verified_outlined, color: Colors.black),
-                          tooltip: 'Request for Badge',
-                          onPressed: () async {
-                            if (badgeStatus == 'none') {
-                              await FirebaseFirestore.instance.collection(
-                                  'users').doc(userId).update({
-                                'badgeStatus': 'Pending',
-                              });
-
-                              final success = await sendBatchRequest(
-                                  context, userId);
-
-                              if (success) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text('✅ Badge request sent.')),
-                                );
-                              }
-                            } else if (badgeStatus == 'pending') {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text(
-                                    '⚠️ Badge request already sent and is under review.')),
-                              );
-                            } else if (badgeStatus == 'assigned') {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text(
-                                    '✅ You are already a verified professional.')),
-                              );
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(
-                                    'Unknown badge status: $badgeStatus')),
-                              );
-                            }
-                          },
-                        );
-                      },
-                    ),
                   if (isCurrentUser)
                     IconButton(
                       icon: const Icon(Icons.edit, color: Colors.black),
@@ -391,6 +305,7 @@ class ProfilePage extends StatelessWidget {
 
   Widget _buildCustomerProfile(BuildContext context,
       Map<String, dynamic> userData) {
+
     final theme = Theme
         .of(context)
         .textTheme;
@@ -414,7 +329,10 @@ class ProfilePage extends StatelessWidget {
 
 
   Widget _buildProfessionalProfile(
-      BuildContext context, Map<String, dynamic> userData, String userId) {
+      BuildContext context,
+      Map<String, dynamic> userData,
+      String userId,
+      ) {
     final theme = Theme.of(context).textTheme;
     final cnic = userData['cnic'] ?? 'Not Provided';
     final whatsapp = userData['whatsapp'] ?? '';
@@ -422,16 +340,14 @@ class ProfilePage extends StatelessWidget {
         ? (userData['createdAt'] as Timestamp).toDate().toLocal().toString().split(' ')[0]
         : 'N/A';
 
+    final isOwnProfile = FirebaseAuth.instance.currentUser?.uid == userId;
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('services')
           .where('userId', isEqualTo: userId)
           .snapshots(),
       builder: (context, servicesSnapshot) {
-        if (servicesSnapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
         final services = servicesSnapshot.data?.docs ?? [];
 
         return StreamBuilder<QuerySnapshot>(
@@ -445,13 +361,8 @@ class ProfilePage extends StatelessWidget {
             final reviewDocs = reviewSnapshot.data?.docs ?? [];
 
             final averageRating = reviewDocs.isNotEmpty
-                ? reviewDocs
-                .map((doc) => (doc['rating'] ?? 0) as num)
-                .reduce((a, b) => a + b) /
-                reviewDocs.length
+                ? reviewDocs.map((doc) => (doc['rating'] ?? 0) as num).reduce((a, b) => a + b) / reviewDocs.length
                 : 0.0;
-
-            final recentReviews = reviewDocs.take(3).toList();
 
             return _buildProfileBase(
               context,
@@ -464,10 +375,7 @@ class ProfilePage extends StatelessWidget {
                   children: [
                     const Icon(Icons.calendar_today, color: Colors.blueAccent),
                     const SizedBox(width: 10),
-                    Text(
-                      'Member Since: $createdAt',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
+                    Text('Member Since: $createdAt', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -487,22 +395,17 @@ class ProfilePage extends StatelessWidget {
                   }
                       : null,
                   icon: const Icon(Icons.message_rounded),
-                  label: Text(
-                    whatsapp.isNotEmpty ? 'Contact on WhatsApp' : 'WhatsApp Not Provided',
-                  ),
+                  label: Text(whatsapp.isNotEmpty ? 'Contact on WhatsApp' : 'WhatsApp Not Provided'),
                 ),
-                const Divider(height: 32, thickness: 1.5),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Services Providing:',
-                    style: theme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+
+                // Services Section
+                if (!isOwnProfile && services.isNotEmpty) ...[
+                  const Divider(height: 32, thickness: 1.5),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Services Providing:', style: theme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                   ),
-                ),
-                const SizedBox(height: 12),
-                if (services.isEmpty)
-                  const Text('No services added by this professional.')
-                else
+                  const SizedBox(height: 12),
                   ListView.separated(
                     physics: const NeverScrollableScrollPhysics(),
                     shrinkWrap: true,
@@ -510,7 +413,7 @@ class ProfilePage extends StatelessWidget {
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final service = services[index].data() as Map<String, dynamic>;
-                      final serviceName = service['service'] ?? 'Unknown Service';
+                      final serviceName = service['service'] ?? 'Unnamed';
                       final serviceCategory = service['category'] ?? 'N/A';
                       final serviceCreatedAt = service['createdAt'] != null
                           ? (service['createdAt'] as Timestamp).toDate().toLocal().toString().split('.')[0]
@@ -521,112 +424,128 @@ class ProfilePage extends StatelessWidget {
                         elevation: 4,
                         child: Padding(
                           padding: const EdgeInsets.all(16),
-                          child: Column(
+                          child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                serviceName,
-                                style: theme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.blue.shade800,
+                              // Left Side (Category + Service Name)
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(serviceCategory,
+                                        style: TextStyle(
+                                            color: Colors.blueGrey[700],
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 4),
+                                    Text(serviceName,
+                                        style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.blue[800])),
+                                    const SizedBox(height: 4),
+                                    Text('Added on: $serviceCreatedAt', style: theme.bodySmall),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              Text('Category: $serviceCategory'),
-                              const SizedBox(height: 4),
-                              Text('Added on: $serviceCreatedAt'),
+                              const SizedBox(width: 12),
+                              // Right Side (Buttons)
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    onPressed: () {
+                                      // Placeholder for edit logic
+                                    },
+                                    icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                                  ),
+                                  IconButton(
+                                    onPressed: () {
+                                      // Placeholder for delete logic
+                                    },
+                                    icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
                       );
                     },
                   ),
+                ],
+
+                // Reviews
                 const Divider(height: 32, thickness: 1.5),
                 if (reviewDocs.isNotEmpty) ...[
                   Row(
                     children: [
                       const Icon(Icons.star, color: Colors.orange),
                       const SizedBox(width: 6),
-                      Text(
-                        'Average Rating: ${averageRating.toStringAsFixed(1)}',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                      ),
+                      Text('Average Rating: ${averageRating.toStringAsFixed(1)}',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  ...recentReviews.map((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final rating = (data['rating'] ?? 0).toDouble();
-                    final text = data['reviewText'] ?? '';
-                    final customerId = data['customerId'] ?? '';
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 140,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: reviewDocs.length,
+                      itemBuilder: (context, index) {
+                        final data = reviewDocs[index].data() as Map<String, dynamic>;
+                        final rating = (data['rating'] ?? 0).toDouble();
+                        final text = data['reviewText'] ?? '';
+                        final customerId = data['customerId'] ?? '';
 
-                    return FutureBuilder<DocumentSnapshot>(
-                      future: FirebaseFirestore.instance.collection('users').doc(customerId).get(),
-                      builder: (context, snapshot) {
-                        final reviewerName =
-                            (snapshot.data?.data() as Map<String, dynamic>?)?['name'] ?? 'Anonymous';
+                        return FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance.collection('users').doc(customerId).get(),
+                          builder: (context, snapshot) {
+                            final reviewerName = (snapshot.data?.data() as Map<String, dynamic>?)?['name'] ?? 'Anonymous';
 
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 6),
-                          child: ListTile(
-                            title: Text(reviewerName),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    ...List.generate(
-                                      rating.floor(),
-                                          (_) => const Icon(Icons.star, size: 16, color: Colors.orange),
-                                    ),
-                                    if (rating - rating.floor() >= 0.5)
-                                      const Icon(Icons.star_half, size: 16, color: Colors.orange),
-                                  ],
+                            return Container(
+                              width: 250,
+                              margin: const EdgeInsets.only(right: 12),
+                              child: Card(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 3,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(reviewerName,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87)),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: List.generate(
+                                          rating.floor(),
+                                              (_) => const Icon(Icons.star, size: 16, color: Colors.orange),
+                                        ) +
+                                            (rating - rating.floor() >= 0.5
+                                                ? [const Icon(Icons.star_half, size: 16, color: Colors.orange)]
+                                                : []),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Expanded(
+                                        child: Text(text,
+                                            maxLines: 3,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 13, color: Colors.black54)),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(text),
-                              ],
-                            ),
-                          ),
+                              ),
+                            );
+                          },
                         );
                       },
-                    );
-                  }).toList(),
+                    ),
+                  ),
                 ] else
                   const Text('No reviews yet.', style: TextStyle(color: Colors.grey)),
-                const Divider(height: 32, thickness: 1.5),
-                FutureBuilder<DocumentSnapshot>(
-                  future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) return const SizedBox();
-
-                    final data = snapshot.data!.data() as Map<String, dynamic>;
-                    final badgeStatus = (data['badgeStatus'] ?? 'None').toString();
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.verified_user, color: Colors.blueGrey),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Badge Status: ${badgeStatus[0].toUpperCase()}${badgeStatus.substring(1)}',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        if (badgeStatus.toLowerCase() == 'pending')
-                          const Text('Your badge request is under review.',
-                              style: TextStyle(color: Colors.orange)),
-                        if (badgeStatus.toLowerCase() == 'assigned')
-                          const Text('You are a verified professional!',
-                              style: TextStyle(color: Colors.green)),
-                      ],
-                    );
-                  },
-                ),
               ],
             );
           },
@@ -634,6 +553,7 @@ class ProfilePage extends StatelessWidget {
       },
     );
   }
+
 
 
 
