@@ -134,22 +134,26 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final ordersRef = FirebaseFirestore.instance
         .collection('orders')
         .where('customerId', isEqualTo: widget.userId);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFE0F2FE), // Light blue background
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
+        backgroundColor: const Color(0xFF38BDF8), // Full header background in blue
+        elevation: 0,
+        centerTitle: true, // Center the title
         title: const Text(
           "My Orders",
-          style: TextStyle(color: Colors.black), // dark text
+          style: TextStyle(
+            color: Colors.white, // White text for better contrast
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        iconTheme: const IconThemeData(color: Colors.black87), // for any icons (if added later)
+        iconTheme: const IconThemeData(color: Colors.white), // White icons
       ),
-
       body: StreamBuilder<QuerySnapshot>(
         stream: ordersRef.snapshots(),
         builder: (context, snapshot) {
@@ -178,7 +182,7 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage> {
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             itemCount: orders.length,
             itemBuilder: (context, index) {
               final order = orders[index];
@@ -186,7 +190,7 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage> {
 
               final int applicationCount = (data['applications'] as List<dynamic>? ?? []).length;
               final String? selectedWorkerId = data['selectedWorkerId'] as String?;
-              final String orderStatus = data['status'] as String? ?? 'pending'; // Get current order status
+              final String orderStatus = data['status'] as String? ?? 'pending';
 
               // Determine if the order is assigned and its status is pending (ready for completion)
               final bool showMarkCompleteButton =
@@ -201,17 +205,15 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage> {
                     ),
                   );
                 },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  margin: const EdgeInsets.symmetric(vertical: 8),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: theme.cardColor,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
                     ],
@@ -221,86 +223,228 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Header row with category and status chip
+                        // Header section with service name and status
                         Row(
                           children: [
-                            Icon(Icons.category, color: theme.colorScheme.primary),
-                            const SizedBox(width: 8),
+                            // Service name in black text
                             Text(
                               data['service'] ?? 'N/A',
-                              style: theme.textTheme.titleMedium!.copyWith(
-                                fontWeight: FontWeight.bold,
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const Spacer(), // Added Spacer here
-                            // Display status based on orderStatus field
-                            Chip(
-                              label: Text(orderStatus.toUpperCase()),
-                              backgroundColor: orderStatus == 'assigned'
-                                  ? Colors.blue.shade100 // Changed to blue for assigned
-                                  : orderStatus == 'completed'
-                                  ? Colors.green.shade100 // Green for completed
-                                  : Colors.orange.shade100, // Orange for pending/waiting
-                              avatar: Icon(
-                                orderStatus == 'assigned'
-                                    ? Icons.person_add // Icon for assigned
-                                    : orderStatus == 'completed'
-                                    ? Icons.task_alt // Icon for completed
-                                    : Icons.hourglass_top, // Icon for pending/waiting
+                            const Spacer(),
+                            // Status chip with orange color for pending
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
                                 color: orderStatus == 'assigned'
-                                    ? Colors.blue
+                                    ? const Color(0xFF3B82F6) // Blue for assigned
                                     : orderStatus == 'completed'
-                                    ? Colors.green
-                                    : Colors.orange,
+                                    ? const Color(0xFF10B981) // Green for completed
+                                    : const Color(0xFFF59E0B), // Orange for pending
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    orderStatus == 'assigned'
+                                        ? Icons.person_add
+                                        : orderStatus == 'completed'
+                                        ? Icons.task_alt
+                                        : Icons.schedule,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    orderStatus.toUpperCase(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Location row with icon
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on,
+                              color: Color(0xFF38BDF8),
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                (data['location'] != null && data['location'] is Map<String, dynamic>)
+                                    ? data['location']['address'] ?? 'N/A'
+                                    : 'N/A',
+                                style: const TextStyle(
+                                  color: Color(0xFF64748B),
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 12),
 
-                        // Order details with colorful emojis
-                        _buildEmojiInfoRow('📂', 'Category:', data['category']),
-                        _buildEmojiInfoRow(
-                          '📍',
-                          'Location:',
-                          (data['location'] != null && data['location'] is Map<String, dynamic>)
-                              ? data['location']['address'] ?? 'N/A'
-                              : 'N/A',
-                        ),
-                        _buildEmojiInfoRow('💰', 'Offered Price:', '\$${data['priceOffer']}'),
-                        _buildEmojiInfoRow('📅', 'Date:', data['serviceDate']),
-                        _buildEmojiInfoRow('⏰', 'Time:', (data['serviceTime'] as String?) ?? 'N/A'),
-
-                        // Mark Complete Button - Moved here, above the Divider
-                        if (showMarkCompleteButton)
-                          Align( // Use Align to position to the right
-                            alignment: Alignment.centerRight,
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 8.0, bottom: 8.0), // Add some padding
-                              child: ElevatedButton.icon(
-                                onPressed: () => _markOrderComplete(context, order.id, widget.userId),
-                                icon: const Icon(Icons.check_circle_outline),
-                                label: const Text('Mark Complete'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: theme.colorScheme.secondary,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
+                        // Date and time row
+                        Row(
+                          children: [
+                            // Date
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.calendar_today,
+                                  color: Color(0xFF38BDF8),
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  data['serviceDate'] ?? 'N/A',
+                                  style: const TextStyle(
+                                    color: Color(0xFF1E293B),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
+                              ],
+                            ),
+                            const SizedBox(width: 24),
+                            // Time
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.access_time,
+                                  color: Color(0xFF38BDF8),
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  (data['serviceTime'] as String?) ?? 'N/A',
+                                  style: const TextStyle(
+                                    color: Color(0xFF1E293B),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Category row with light blur icon (no "Category:" text)
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF38BDF8).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.build_circle_outlined,
+                                color: const Color(0xFF38BDF8).withOpacity(0.7),
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                data['category'] ?? 'N/A',
+                                style: const TextStyle(
+                                  color: Color(0xFF1E293B),
+                                  fontSize: 14,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Price row with light blue blur icon (no "Price:" text, using Rs.)
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF38BDF8).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.payments_outlined,
+                                color: const Color(0xFF38BDF8).withOpacity(0.7),
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Rs. ${data['priceOffer']}',
+                                style: const TextStyle(
+                                  color: Color(0xFF1E293B),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Mark Complete Button
+                        if (showMarkCompleteButton)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _markOrderComplete(context, order.id, widget.userId),
+                              icon: const Icon(Icons.check_circle_outline, size: 18),
+                              label: const Text('Mark Complete'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF10B981),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                elevation: 0,
                               ),
                             ),
                           ),
 
-                        const Divider(height: 24, thickness: 1), // The black line
+                        if (showMarkCompleteButton) const SizedBox(height: 12),
 
-                        // Applications display part
+                        // Divider
+                        Container(
+                          height: 1,
+                          color: const Color(0xFFE2E8F0),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Applications count
                         Text(
                           'Applications: $applicationCount',
-                          style: theme.textTheme.titleSmall!.copyWith(fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                        const SizedBox(height: 12), // Added spacing
                       ],
                     ),
                   ),
@@ -311,27 +455,35 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.lightBlue.shade700,
+        backgroundColor: const Color(0xFF38BDF8), // Matching theme blue
         onPressed: () => _showAddOrderModal(context, widget.userId),
-        child: const Icon(Icons.add, size: 28),
+        child: const Icon(Icons.add, size: 28, color: Colors.white),
       ),
     );
   }
 
-  // Helper widget to build info rows with emojis
-  Widget _buildEmojiInfoRow(String emoji, String label, String? value) {
+  // Helper widget to build detail rows
+  Widget _buildDetailRow(String label, String? value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 20)),
-          const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               value ?? 'N/A',
-              style: const TextStyle(fontWeight: FontWeight.normal),
+              style: const TextStyle(
+                color: Color(0xFF1E293B),
+                fontSize: 14,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -356,7 +508,7 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage> {
         transaction.update(orderRef, {
           'selectedWorkerId': workerId,
           'visibleToWorkerIds': [workerId],
-          'status': 'assigned', // Status set to 'assigned' when worker is accepted/assigned
+          'status': 'assigned',
         });
       });
 
@@ -402,16 +554,16 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage> {
   }
 }
 
-// New StatefulWidget for the Review Form
+// Review Form with updated theme
 class _ReviewForm extends StatefulWidget {
   final String orderId;
   final String customerId;
-  final String workerId; // Add workerId to the constructor
+  final String workerId;
 
   const _ReviewForm({
     required this.orderId,
     required this.customerId,
-    required this.workerId, // Make it required
+    required this.workerId,
   });
 
   @override
@@ -419,11 +571,10 @@ class _ReviewForm extends StatefulWidget {
 }
 
 class _ReviewFormState extends State<_ReviewForm> {
-  double _rating = 3.0; // Default rating
+  double _rating = 3.0;
   final TextEditingController _reviewTextController = TextEditingController();
-  bool _isSubmitting = false; // To prevent multiple submissions
+  bool _isSubmitting = false;
 
-  // Function to submit the review to Firestore
   Future<void> _submitReview() async {
     if (_reviewTextController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -437,24 +588,23 @@ class _ReviewFormState extends State<_ReviewForm> {
     });
 
     try {
-      // Change Firestore path to save review under the worker's user document
       await FirebaseFirestore.instance
           .collection('users')
-          .doc(widget.workerId) // <-- Now targets the worker's user ID
+          .doc(widget.workerId)
           .collection('reviews')
           .add({
         'orderId': widget.orderId,
         'customerId': widget.customerId,
-        'workerId': widget.workerId, // Also add workerId to the review data
+        'workerId': widget.workerId,
         'rating': _rating,
         'reviewText': _reviewTextController.text.trim(),
-        'timestamp': FieldValue.serverTimestamp(), // Timestamp for when the review was submitted
+        'timestamp': FieldValue.serverTimestamp(),
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Review submitted successfully!'), backgroundColor: Colors.green),
       );
-      Navigator.pop(context); // Dismiss the review form
+      Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error submitting review: $e'), backgroundColor: Colors.red),
@@ -474,7 +624,6 @@ class _ReviewFormState extends State<_ReviewForm> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -482,8 +631,7 @@ class _ReviewFormState extends State<_ReviewForm> {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          // Review Form background color uses theme's canvasColor
-          color: theme.canvasColor,
+          color: Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           boxShadow: [
             BoxShadow(
@@ -497,9 +645,13 @@ class _ReviewFormState extends State<_ReviewForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
+            const Text(
               'Rate Your Service',
-              style: theme.textTheme.headlineSmall!.copyWith(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
@@ -510,12 +662,12 @@ class _ReviewFormState extends State<_ReviewForm> {
                 return IconButton(
                   icon: Icon(
                     index < _rating.floor() ? Icons.star : Icons.star_border,
-                    color: Colors.amber, // Star color
+                    color: const Color(0xFFF59E0B),
                     size: 36.0,
                   ),
                   onPressed: () {
                     setState(() {
-                      _rating = (index + 1).toDouble(); // Set rating based on tapped star
+                      _rating = (index + 1).toDouble();
                     });
                   },
                 );
@@ -529,9 +681,14 @@ class _ReviewFormState extends State<_ReviewForm> {
                 hintText: 'Share your experience...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF38BDF8)),
                 ),
                 filled: true,
-                fillColor: theme.inputDecorationTheme.fillColor,
+                fillColor: const Color(0xFFF8FAFC),
               ),
               maxLines: 4,
               keyboardType: TextInputType.multiline,
@@ -551,14 +708,13 @@ class _ReviewFormState extends State<_ReviewForm> {
                   : const Icon(Icons.send),
               label: Text(_isSubmitting ? 'Submitting...' : 'Submit Review'),
               style: ElevatedButton.styleFrom(
-                // Submit button background color: sky blue
-                backgroundColor: Colors.lightBlue.shade700,
+                backgroundColor: const Color(0xFF38BDF8),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                elevation: 3,
+                elevation: 0,
               ),
             ),
           ],

@@ -7,6 +7,7 @@ import 'landingPage.dart';
 import 'professionalSchedule.dart';
 import 'customerHistory.dart';
 import 'professionalProfile.dart';
+import 'customerProfile.dart';
 
 class HomeNavPage extends StatefulWidget {
   final String userId;
@@ -37,7 +38,7 @@ class _HomeNavPageState extends State<HomeNavPage> {
       _pages = [
         LandingPage(),
         CustomerOrdersPage(userId: widget.userId),
-        ProfilePage(userId: widget.userId),
+        CustomerProfile(userId: widget.userId),
         CustomerHistoryPage(userId: widget.userId),
       ];
     }
