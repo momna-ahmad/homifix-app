@@ -32,9 +32,14 @@ Future<void> sendPushNotification({
   }
 }
 
-class BadgeRequestsPage extends StatelessWidget {
+class BadgeRequestsPage extends StatefulWidget {
   const BadgeRequestsPage({super.key});
 
+  @override
+  _BadgeRequestsPageState createState() => _BadgeRequestsPageState();
+}
+
+class _BadgeRequestsPageState extends State<BadgeRequestsPage> {
   Stream<QuerySnapshot> _pendingBadgeRequests() {
     return FirebaseFirestore.instance
         .collection('batch_requests')
@@ -50,16 +55,14 @@ class BadgeRequestsPage extends StatelessWidget {
         'badgeStatus': 'assigned',
       });
 
-      // 2. Update batch_requests status to "Assigned"
       await FirebaseFirestore.instance.collection('batch_requests').doc(requestId).update({
         'status': 'assigned',
       });
 
-      // 3. Show success message
       scaffoldMessenger.showSnackBar(
         const SnackBar(
           content: Text('🎉 Badge has been assigned to the professional.'),
-          backgroundColor: Colors.green,
+          backgroundColor: Color(0xFF059669),
           duration: Duration(seconds: 3),
         ),
       );
@@ -84,86 +87,269 @@ class BadgeRequestsPage extends StatelessWidget {
     }
   }
 
-
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF7FAFC),
       appBar: AppBar(
-        title: const Text('Badge Requests'),
+        title: const Text(
+          'Badge Requests',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+            color: Color(0xFF1A202C),
+          ),
+        ),
         backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF1A202C)),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: const Color(0xFFE2E8F0),
+          ),
+        ),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _pendingBadgeRequests(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text('No pending badge requests'));
-          }
-
-          final professionals = snapshot.data!.docs;
-
-          return ListView.builder(
-            itemCount: professionals.length,
-            itemBuilder: (context, index) {
-              final doc = professionals[index];
-              final data = doc.data() as Map<String, dynamic>;
-              final userId = data['userId'] ?? '';
-
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.badge),
-                        title: FutureBuilder<DocumentSnapshot>(
-                          future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) return const Text('Loading...');
-                            final userData = snapshot.data!.data() as Map<String, dynamic>;
-                            return Text(userData['name'] ?? 'No Name');
-                          },
+      body: Column(
+        children: [
+          // Header Card
+          Container(
+            margin: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF22D3EE), Color(0xFF0EA5E9)],
+              ),
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Badge Management',
+                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
-                        subtitle: const Text('Requested Badge'),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(
-                            child: const Text('Review Profile'),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ProfilePage(userId: userId, isAdmin: true),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 10),
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.check_circle),
-                            label: const Text('Assign Badge'),
-                            onPressed: () => _assignBadge(doc.id, userId, context),
-                          ),
-                        ],
-                      ),
-                    ],
+                        SizedBox(height: 8),
+                        Text(
+                          'Verify your Professionals',
+                          style: TextStyle(fontSize: 16, color: Colors.white70),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
-          );
-        },
+                  SizedBox(width: 16),
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.badge, color: Colors.white, size: 30),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Badge Requests List
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _pendingBadgeRequests(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF22D3EE)),
+                    ),
+                  );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.badge_outlined, size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'No pending badge requests',
+                          style: TextStyle(fontSize: 16, color: Color(0xFF718096)),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final professionals = snapshot.data!.docs;
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16.0),
+                  itemCount: professionals.length,
+                  itemBuilder: (context, index) {
+                    final doc = professionals[index];
+                    final data = doc.data() as Map<String, dynamic>;
+                    final userId = data['userId'] ?? '';
+
+                    return FutureBuilder<DocumentSnapshot>(
+                      future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
+                      builder: (context, userSnapshot) {
+                        if (!userSnapshot.hasData) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+
+                        final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+                        final userName = userData['name'] ?? 'No Name';
+                        final userPhone = userData['phone'] ?? '';
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 16.0),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16.0),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 50,
+                                      height: 50,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF22D3EE).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(Icons.badge, color: Color(0xFF22D3EE), size: 24),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            userName,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 18,
+                                              color: Color(0xFF1A202C),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFD97706),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: const Text(
+                                              'Badge Request',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        icon: const Icon(Icons.person_outline, size: 18),
+                                        label: const Text('Review Profile'),
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => ProfilePage(userId: userId, isAdmin: true),
+                                            ),
+                                          );
+                                        },
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: const Color(0xFF22D3EE),
+                                          side: const BorderSide(color: Color(0xFF22D3EE)),
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        icon: const Icon(Icons.check_circle, size: 18),
+                                        label: const Text('Assign Badge'),
+                                        onPressed: () => _assignBadge(doc.id, userId, context),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF22D3EE),
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildDetailItem(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: const Color(0xFF718096)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF718096), fontWeight: FontWeight.w500)),
+              const SizedBox(height: 2),
+              Text(value, style: const TextStyle(fontSize: 14, color: Color(0xFF1A202C), fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

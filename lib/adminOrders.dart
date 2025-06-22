@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,6 +17,7 @@ class _AdminOrdersState extends State<AdminOrders> {
   List<Map<String, dynamic>> filteredOrders = [];
   TextEditingController searchController = TextEditingController();
   bool isLoading = false;
+  String selectedStatus = 'All';
 
   @override
   void initState() {
@@ -31,77 +31,79 @@ class _AdminOrdersState extends State<AdminOrders> {
         isLoading = true;
       });
 
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('orders')
-          .orderBy('createdAt', descending: true)
-          .get();
+      Query query = FirebaseFirestore.instance.collection('orders');
+
+      // Filter by status only if it's not 'All'
+      if (selectedStatus != 'All') {
+        query = query.where('status', isEqualTo: selectedStatus.toLowerCase());
+      }
+
+      QuerySnapshot orderSnapshot = await query.get();
 
       List<Map<String, dynamic>> tempOrders = [];
 
-      for (var doc in snapshot.docs) {
-        var data = doc.data() as Map<String, dynamic>;
-
-        String professionalName = 'Unknown';
+      for (var orderDoc in orderSnapshot.docs) {
+        var order = orderDoc.data() as Map<String, dynamic>;
         String customerName = 'Unknown';
+        String professionalName = 'Unknown';
 
-        // Fetch professional name using selectedWorkerId
-        if (data['selectedWorkerId'] != null && data['selectedWorkerId'].toString().isNotEmpty) {
-          try {
-            DocumentSnapshot professionalSnap = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(data['selectedWorkerId'])
-                .get();
-
-            if (professionalSnap.exists) {
-              var professionalData = professionalSnap.data() as Map<String, dynamic>?;
-              professionalName = professionalData?['name'] ?? 'Unknown';
-            }
-          } catch (e) {
-            print('Error fetching professional: $e');
-            professionalName = 'Error loading';
-          }
-        }
-
-        // Fetch customer name using customerId
-        if (data['customerId'] != null && data['customerId'].toString().isNotEmpty) {
+        // Get customer name
+        if (order['customerId'] != null) {
           try {
             DocumentSnapshot customerSnap = await FirebaseFirestore.instance
                 .collection('users')
-                .doc(data['customerId'])
+                .doc(order['customerId'])
                 .get();
 
             if (customerSnap.exists) {
-              var customerData = customerSnap.data() as Map<String, dynamic>?;
-              customerName = customerData?['name'] ?? 'Unknown';
+              var customerData = customerSnap.data() as Map<String, dynamic>;
+              customerName = customerData['name'] ?? 'Unknown';
             }
           } catch (e) {
-            print('Error fetching customer: $e');
             customerName = 'Error loading';
           }
         }
 
-        // Handle createdAt field properly
+        // Get professional name
+        if (order['professionalId'] != null) {
+          try {
+            DocumentSnapshot profSnap = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(order['professionalId'])
+                .get();
+
+            if (profSnap.exists) {
+              var profData = profSnap.data() as Map<String, dynamic>;
+              professionalName = profData['name'] ?? 'Unknown';
+            }
+          } catch (e) {
+            professionalName = 'Error loading';
+          }
+        }
+
+        // Parse createdAt timestamp
         String createdAtString = '';
-        if (data['createdAt'] != null) {
-          if (data['createdAt'] is Timestamp) {
-            DateTime dateTime = data['createdAt'].toDate();
-            createdAtString = '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
-          } else if (data['createdAt'] is String) {
-            createdAtString = data['createdAt'];
+        if (order['createdAt'] != null) {
+          if (order['createdAt'] is Timestamp) {
+            DateTime dateTime = (order['createdAt'] as Timestamp).toDate();
+            createdAtString =
+            '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+          } else if (order['createdAt'] is String) {
+            createdAtString = order['createdAt'];
           }
         }
 
         tempOrders.add({
-          'id': doc.id,
-          'service': data['category'] ?? '',
+          'id': order['orderId'] ?? orderDoc.id,
+          'service': order['category'] ?? '',
           'professional': professionalName,
           'client': customerName,
-          'status': data['status'] ?? '',
+          'status': order['status'] ?? '',
           'createdAt': createdAtString,
-          'price': data['price'] ?? '',
-          'message': data['message'] ?? '',
-          'address': data['address'] ?? '',
-          'phone': data['phone'] ?? '',
+          'price': order['price'] ?? '',
+          'message': order['message'] ?? '',
+          'address': order['address'] ?? '',
+          'phone': order['phone'] ?? '',
         });
       }
 
@@ -118,6 +120,8 @@ class _AdminOrdersState extends State<AdminOrders> {
     }
   }
 
+
+
   void searchOrders(String query) {
     setState(() {
       filteredOrders = orders.where((order) {
@@ -131,7 +135,6 @@ class _AdminOrdersState extends State<AdminOrders> {
 
   Future<void> exportToCSV() async {
     try {
-      // Show loading dialog
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -148,7 +151,6 @@ class _AdminOrdersState extends State<AdminOrders> {
         },
       );
 
-      // Prepare CSV data
       List<List<String>> csvData = [
         ['Order ID', 'Service', 'Professional', 'Client', 'Status', 'Date', 'Price', 'Address', 'Phone', 'Message']
       ];
@@ -168,12 +170,10 @@ class _AdminOrdersState extends State<AdminOrders> {
         ]);
       }
 
-      // Convert to CSV string
       String csv = const ListToCsvConverter().convert(csvData);
 
       if (kIsWeb) {
-        // Web implementation (if needed)
-        Navigator.of(context).pop(); // Close loading dialog
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('CSV export on web - please implement web-specific code'),
@@ -181,11 +181,10 @@ class _AdminOrdersState extends State<AdminOrders> {
           ),
         );
       } else {
-        // Mobile implementation
         await _saveCsvToMobile(csv);
       }
     } catch (e) {
-      Navigator.of(context).pop(); // Close loading dialog
+      Navigator.of(context).pop();
       print('Error exporting CSV: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -198,13 +197,12 @@ class _AdminOrdersState extends State<AdminOrders> {
 
   Future<void> _saveCsvToMobile(String csvContent) async {
     try {
-      // Request storage permission for Android
       if (Platform.isAndroid) {
         var status = await Permission.storage.status;
         if (!status.isGranted) {
           status = await Permission.storage.request();
           if (!status.isGranted) {
-            Navigator.of(context).pop(); // Close loading dialog
+            Navigator.of(context).pop();
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Storage permission is required to save CSV file'),
@@ -216,7 +214,6 @@ class _AdminOrdersState extends State<AdminOrders> {
         }
       }
 
-      // Get the directory to save the file
       Directory? directory;
       if (Platform.isAndroid) {
         directory = await getExternalStorageDirectory();
@@ -225,21 +222,17 @@ class _AdminOrdersState extends State<AdminOrders> {
       }
 
       if (directory != null) {
-        // Create filename with timestamp
         String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-        String fileName = 'admin_orders_$timestamp.csv';
+        String fileName = 'orders_$timestamp.csv';
         String filePath = '${directory.path}/$fileName';
 
-        // Write CSV content to file
         File file = File(filePath);
         await file.writeAsString(csvContent);
 
-        Navigator.of(context).pop(); // Close loading dialog
-
-        // Show options dialog
+        Navigator.of(context).pop();
         _showExportSuccessDialog(filePath, fileName);
       } else {
-        Navigator.of(context).pop(); // Close loading dialog
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Could not access storage directory'),
@@ -248,7 +241,7 @@ class _AdminOrdersState extends State<AdminOrders> {
         );
       }
     } catch (e) {
-      Navigator.of(context).pop(); // Close loading dialog
+      Navigator.of(context).pop();
       print('Error saving CSV to mobile: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -275,7 +268,7 @@ class _AdminOrdersState extends State<AdminOrders> {
                 'Export Successful',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF2D3748),
+                  color: Color(0xFF1A202C),
                 ),
               ),
             ],
@@ -295,20 +288,20 @@ class _AdminOrdersState extends State<AdminOrders> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF7FAFC),
+                  color: const Color(0xFFECFDF5),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(color: const Color(0xFF22D3EE)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.file_present, color: Color(0xFF4299E1), size: 20),
+                    const Icon(Icons.file_present, color: Color(0xFF22D3EE), size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         fileName,
                         style: const TextStyle(
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF2D3748),
+                          color: Color(0xFF1A202C),
                         ),
                       ),
                     ),
@@ -330,7 +323,7 @@ class _AdminOrdersState extends State<AdminOrders> {
             ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4299E1),
+                backgroundColor: const Color(0xFF22D3EE),
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
@@ -341,7 +334,7 @@ class _AdminOrdersState extends State<AdminOrders> {
                 Navigator.of(context).pop();
                 await Share.shareXFiles(
                   [XFile(filePath)],
-                  text: 'Admin Orders CSV Export',
+                  text: 'Orders CSV Export',
                 );
               },
               icon: const Icon(Icons.share, size: 18),
@@ -359,19 +352,19 @@ class _AdminOrdersState extends State<AdminOrders> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF7FAFC),
       appBar: AppBar(
         title: const Text(
-          'Admin Orders',
+          'Orders',
           style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 20,
-            color: Color(0xFF2D3748),
+            color: Color(0xFF1A202C),
           ),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF2D3748)),
+        iconTheme: const IconThemeData(color: Color(0xFF1A202C)),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
@@ -380,7 +373,7 @@ class _AdminOrdersState extends State<AdminOrders> {
               icon: const Icon(Icons.download, size: 18),
               label: const Text('Export CSV'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF38A169),
+                backgroundColor: const Color(0xFF22D3EE),
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -401,6 +394,67 @@ class _AdminOrdersState extends State<AdminOrders> {
       ),
       body: Column(
         children: [
+          // Stay Organized Card
+          Container(
+            margin: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF22D3EE),
+                  Color(0xFF0EA5E9),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Stay Organized',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Manage your Orders',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white70,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.calendar_today,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
           // Search Bar and Stats
           Container(
             color: Colors.white,
@@ -410,9 +464,9 @@ class _AdminOrdersState extends State<AdminOrders> {
                 // Search Bar
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF7FAFC),
+                    color: const Color(0xFFECFDF5),
                     borderRadius: BorderRadius.circular(12.0),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    border: Border.all(color: const Color(0xFF67E8F9)),
                   ),
                   child: TextField(
                     controller: searchController,
@@ -425,7 +479,7 @@ class _AdminOrdersState extends State<AdminOrders> {
                       ),
                       prefixIcon: const Icon(
                         Icons.search,
-                        color: Color(0xFF4299E1),
+                        color: Color(0xFF22D3EE),
                         size: 22,
                       ),
                       border: InputBorder.none,
@@ -436,7 +490,7 @@ class _AdminOrdersState extends State<AdminOrders> {
                     ),
                     style: const TextStyle(
                       fontSize: 16,
-                      color: Color(0xFF2D3748),
+                      color: Color(0xFF1A202C),
                     ),
                   ),
                 ),
@@ -447,15 +501,33 @@ class _AdminOrdersState extends State<AdminOrders> {
                     padding: const EdgeInsets.only(top: 16.0),
                     child: Row(
                       children: [
-                        _buildStatCard('Total Orders', filteredOrders.length.toString(), Colors.blue),
-                        const SizedBox(width: 12),
-                        _buildStatCard('Completed',
-                            filteredOrders.where((o) => o['status']?.toLowerCase() == 'completed').length.toString(),
-                            Colors.green),
-                        const SizedBox(width: 12),
-                        _buildStatCard('Pending',
-                            filteredOrders.where((o) => o['status']?.toLowerCase() == 'pending').length.toString(),
-                            Colors.orange),
+                        _buildStatCard(
+                          'Total',
+                          filteredOrders.length.toString(),
+                          const Color(0xFF22D3EE),
+                          Icons.receipt_long,
+                        ),
+                        const SizedBox(width: 8),
+                        _buildStatCard(
+                          'Complete',
+                          filteredOrders.where((o) => o['status']?.toLowerCase() == 'completed').length.toString(),
+                          const Color(0xFF059669),
+                          Icons.check_circle,
+                        ),
+                        const SizedBox(width: 8),
+                        _buildStatCard(
+                          'Assigned',
+                          filteredOrders.where((o) => o['status']?.toLowerCase() == 'assigned').length.toString(),
+                          const Color(0xFF7C3AED),
+                          Icons.assignment,
+                        ),
+                        const SizedBox(width: 8),
+                        _buildStatCard(
+                          'waiting',
+                          filteredOrders.where((o) => o['status']?.toLowerCase() == 'waiting').length.toString(),
+                          const Color(0xFFD97706),
+                          Icons.pending,
+                        ),
                       ],
                     ),
                   ),
@@ -468,7 +540,7 @@ class _AdminOrdersState extends State<AdminOrders> {
             child: isLoading
                 ? const Center(
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4299E1)),
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF22D3EE)),
               ),
             )
                 : filteredOrders.isEmpty
@@ -509,33 +581,41 @@ class _AdminOrdersState extends State<AdminOrders> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, Color color) {
+  Widget _buildStatCard(String title, String value, Color color, IconData icon) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.3)),
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.2)),
         ),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            Icon(
+              icon,
+              color: color,
+              size: 20,
+            ),
+            const SizedBox(height: 6),
             Text(
               value,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: color,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               title,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 color: color,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
               ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -572,7 +652,7 @@ class _AdminOrdersState extends State<AdminOrders> {
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 18,
-                      color: Color(0xFF2D3748),
+                      color: Color(0xFF1A202C),
                     ),
                   ),
                 ),
@@ -632,7 +712,7 @@ class _AdminOrdersState extends State<AdminOrders> {
                     child: _buildDetailItem(
                       Icons.attach_money,
                       'Price',
-                      '\$${order['price']}',
+                      'Rs. ${order['price']}',
                     ),
                   ),
               ],
@@ -697,7 +777,7 @@ class _AdminOrdersState extends State<AdminOrders> {
                 value,
                 style: const TextStyle(
                   fontSize: 14,
-                  color: Color(0xFF2D3748),
+                  color: Color(0xFF1A202C),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -711,13 +791,15 @@ class _AdminOrdersState extends State<AdminOrders> {
   Color _getStatusColor(String? status) {
     switch (status?.toLowerCase()) {
       case 'completed':
-        return const Color(0xFF38A169);
+        return const Color(0xFF059669);
+      case 'assigned':
+        return const Color(0xFF7C3AED);
       case 'pending':
-        return const Color(0xFFED8936);
+        return const Color(0xFFD97706);
       case 'cancelled':
-        return const Color(0xFFE53E3E);
+        return const Color(0xFFDC2626);
       case 'in progress':
-        return const Color(0xFF4299E1);
+        return const Color(0xFF22D3EE);
       default:
         return const Color(0xFF718096);
     }

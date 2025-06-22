@@ -7,7 +7,6 @@ import 'homeNavPage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'adminDashboard.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -29,7 +28,6 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
   bool _isLoading = false;
 
-  // Interstitial Ad
   InterstitialAd? _interstitialAd;
   bool _isInterstitialAdReady = false;
 
@@ -40,9 +38,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _loadInterstitialAd() {
-    print('Loading interstitial ad...');
-    print('Ad Unit ID: ${dotenv.env['ADMOB_INTERSTITIAL_ID']}');
-
     InterstitialAd.load(
       adUnitId: dotenv.env['ADMOB_INTERSTITIAL_ID'] ?? 'ca-app-pub-9203166790299807/4944810074',
       request: const AdRequest(),
@@ -50,10 +45,8 @@ class _LoginScreenState extends State<LoginScreen> {
         onAdLoaded: (InterstitialAd ad) {
           _interstitialAd = ad;
           _isInterstitialAdReady = true;
-          print('✅ Interstitial ad loaded successfully');
         },
         onAdFailedToLoad: (LoadAdError error) {
-          print('❌ Interstitial ad failed to load: $error');
           _isInterstitialAdReady = false;
         },
       ),
@@ -100,7 +93,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-
   void _loginUser() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       setState(() {
@@ -129,16 +121,11 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      try {
-        final fcmToken = await FirebaseMessaging.instance.getToken();
-        if (fcmToken != null) {
-          await FirebaseFirestore.instance.collection('users').doc(uid).update({
-            'fcmToken': fcmToken,
-          });
-          print('✅ FCM token updated in Firestore for user $uid');
-        }
-      } catch (e) {
-        print("⚠️ Failed to update FCM token: $e");
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).update({
+          'fcmToken': fcmToken,
+        });
       }
 
       final prefs = await SharedPreferences.getInstance();
@@ -153,8 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
 
-      _showInterstitialAdAndNavigate(uid, role); // ✅ Only one navigation call here
-
+      _showInterstitialAdAndNavigate(uid, role);
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
@@ -165,9 +151,6 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     }
   }
-
-
-
 
   @override
   void dispose() {
@@ -203,163 +186,136 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Changed to blue color matching your navigation bar
     const Color darkBlue = Color(0xFF2196F3);
 
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(
-            'assets/loginImage.jpeg',
-            fit: BoxFit.cover,
-          ),
-          Container(color: Colors.black.withOpacity(0.3)),
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    height: 200,
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 24),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      image: const DecorationImage(
-                        image: AssetImage('assets/loginImage.jpeg'),
-                        fit: BoxFit.cover,
+      backgroundColor: const Color(0xFFF5F6F8),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  offset: Offset(0, 4),
+                  blurRadius: 10,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Welcome Back!',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: darkBlue,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Login to your account',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: 'Email',
+                    hintText: 'johndoe@gmail.com',
+                    prefixIcon: Icon(Icons.email, color: darkBlue),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    hintText: '********',
+                    prefixIcon: Icon(Icons.lock, color: darkBlue),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _isLoading
+                    ? const CircularProgressIndicator()
+                    : SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _loginUser,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: darkBlue,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text(
+                      'Login',
+                      style: TextStyle(fontSize: 18, color: Colors.white),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Forgot password screen coming soon!")),
+                    );
+                  },
+                  child: Text('Forgot your password?', style: TextStyle(color: darkBlue)),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text("Don't have an account? "),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => SignupScreen()),
+                        );
+                      },
+                      child: Text(
+                        'Sign Up',
+                        style: TextStyle(
+                          color: darkBlue,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black26,
-                          offset: Offset(0, 4),
-                          blurRadius: 10,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Welcome Back!',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: darkBlue,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Login to your account',
-                          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                        ),
-                        const SizedBox(height: 24),
-                        TextField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: InputDecoration(
-                            labelText: 'Email',
-                            hintText: 'johndoe@gmail.com',
-                            prefixIcon: Icon(Icons.email, color: darkBlue),
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _passwordController,
-                          obscureText: true,
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            hintText: '********',
-                            prefixIcon: Icon(Icons.lock, color: darkBlue),
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        _isLoading
-                            ? const CircularProgressIndicator()
-                            : SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _loginUser,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: darkBlue,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: const Text(
-                              'Login',
-                              style: TextStyle(fontSize: 18, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextButton(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Forgot password screen coming soon!")),
-                            );
-                          },
-                          child: Text('Forgot your password?', style: TextStyle(color: darkBlue)),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text("Don't have an account? "),
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => SignupScreen()),
-                                );
-                              },
-                              child: Text(
-                                'Sign Up',
-                                style: TextStyle(
-                                  color: darkBlue,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (_errorMessage != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12.0),
-                            child: Text(
-                              'Error: $_errorMessage',
-                              style: const TextStyle(color: Colors.red),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                      ],
+                  ],
+                ),
+                if (_errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12.0),
+                    child: Text(
+                      'Error: $_errorMessage',
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
