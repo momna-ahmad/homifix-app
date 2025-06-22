@@ -394,67 +394,6 @@ class _AdminOrdersState extends State<AdminOrders> {
       ),
       body: Column(
         children: [
-          // Stay Organized Card
-          Container(
-            margin: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF22D3EE),
-                  Color(0xFF0EA5E9),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16.0),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Stay Organized',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Manage your Orders',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white70,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.calendar_today,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
           // Search Bar and Stats
           Container(
             color: Colors.white,

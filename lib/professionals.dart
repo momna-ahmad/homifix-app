@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:home_services_app/profilePage.dart';
+import 'professionalForCustomer.dart';
 import 'professional_orders_page.dart';
 
 class ProfessionalsPageWithOrders extends StatefulWidget {
@@ -86,7 +86,7 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
         // Filter orders with completionStatus == 'assigned' or 'completed'
         final filtered = orders.where((order) {
           final status = (order['completionStatus'] ?? '').toString().toLowerCase();
-          return status == 'assigned' || status == 'completed' ||  status == 'pending';
+          return status == 'assigned' || status == 'completed' || status == 'pending';
         }).toList();
 
         return filtered.length;
@@ -99,17 +99,20 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
     }
   }
 
-
-
-
   List<QueryDocumentSnapshot> _filterUsers(List<QueryDocumentSnapshot> users) {
     return users.where((user) {
       final userData = user.data() as Map<String, dynamic>? ?? {};
       final name = (userData['name'] ?? '').toString().toLowerCase();
+
+      // Filter out reported users
+      final isReported = userData['isReported'] == true ||
+          userData['reported'] == true ||
+          userData['Reported'] == true;
+
       final matchesSearch = _searchQuery.isEmpty ||
           name.contains(_searchQuery.toLowerCase());
 
-      return matchesSearch;
+      return matchesSearch && !isReported; // Only show non-reported users
     }).toList();
   }
 
@@ -154,6 +157,29 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
             fontWeight: FontWeight.w600,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildYellowStarBadge() {
+    return Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBBF24), // Yellow color
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFBBF24).withOpacity(0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: const Icon(
+        Icons.star,
+        color: Colors.white,
+        size: 14,
       ),
     );
   }
@@ -341,18 +367,17 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                         userData['Name']?.toString() ??
                         userData['userName']?.toString() ?? 'No Name';
 
-
                     final profileImageUrl = userData['profileImageUrl']?.toString() ??
                         userData['profileImage']?.toString() ??
                         userData['imageUrl']?.toString();
 
-                    final isReported = userData['isReported'] == true ||
-                        userData['reported'] == true ||
-                        userData['Reported'] == true;
-
                     final isDisabled = userData['isDisabled'] == true ||
                         userData['disabled'] == true ||
                         userData['Disabled'] == true;
+
+                    // Check badgeStatus directly from user data
+                    final badgeStatus = userData['badgeStatus']?.toString().toLowerCase();
+                    final showStar = badgeStatus == 'assigned';
 
                     final userId = user.id;
 
@@ -429,7 +454,7 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        // Name and Order Count Row
+                                        // Name and Order Count Row with Star
                                         Row(
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
@@ -443,7 +468,18 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                                                 ),
                                               ),
                                             ),
-                                            _buildOrderCountBadge(orderCount, userId, name),
+                                            // Order count badge and star container
+                                            Row(
+                                              children: [
+                                                // Show yellow star if badgeStatus is assigned
+                                                if (showStar) ...[
+                                                  _buildYellowStarBadge(),
+                                                  const SizedBox(width: 8),
+                                                ],
+                                                // Order count badge
+                                                _buildOrderCountBadge(orderCount, userId, name),
+                                              ],
+                                            ),
                                           ],
                                         ),
 
@@ -512,48 +548,15 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                                           ],
                                         ),
 
-                                        // Status Chips
-                                        if (isDisabled || isReported) ...[
+                                        // Status Chips - Only show disabled status
+                                        if (isDisabled) ...[
                                           const SizedBox(height: 8),
-                                          Row(
-                                            children: [
-                                              if (isDisabled)
-                                                _buildStatusChip('Disabled', const Color(0xFFDC2626)),
-                                              if (isReported && !isDisabled) ...[
-                                                const SizedBox(width: 8),
-                                                _buildStatusChip('Reported', const Color(0xFFD97706)),
-                                              ],
-                                            ],
-                                          ),
+                                          _buildStatusChip('Disabled', const Color(0xFFDC2626)),
                                         ],
 
                                         const SizedBox(height: 16),
 
-                                        // Action Buttons
-                                        if (isReported && !isDisabled)
-                                          SizedBox(
-                                            width: double.infinity,
-                                            child: ElevatedButton(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFFDC2626),
-                                                foregroundColor: Colors.white,
-                                                elevation: 0,
-                                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                ),
-                                              ),
-                                              onPressed: () => _disableUser(userId, context),
-                                              child: const Text(
-                                                'Disable',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-
+                                        // Show disabled status
                                         if (isDisabled)
                                           SizedBox(
                                             width: double.infinity,
@@ -646,10 +649,7 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => ProfilePage(
-                        userId: userId,
-                        isAdmin: true,
-                      ),
+                      builder: (_) => ProfessionalForCustomer(userId: userId),
                     ),
                   );
                 },
@@ -705,98 +705,6 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
           fontWeight: FontWeight.w600,
         ),
       ),
-    );
-  }
-
-  void _disableUser(String userId, BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text(
-            'Disable User',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A202C),
-            ),
-          ),
-          content: const Text(
-            'Are you sure you want to disable this user? They will not be able to work until enabled again.',
-            style: TextStyle(
-              color: Color(0xFF4A5568),
-              fontSize: 16,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(
-                  color: Color(0xFF718096),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFDC2626),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: () async {
-                try {
-                  await FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(userId)
-                      .update({
-                    'isDisabled': true,
-                    'disabledAt': FieldValue.serverTimestamp(),
-                  });
-
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('User has been disabled'),
-                        backgroundColor: const Color(0xFF059669),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error disabling user: $e'),
-                        backgroundColor: const Color(0xFFDC2626),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    );
-                  }
-                }
-              },
-              child: const Text(
-                'Disable',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 

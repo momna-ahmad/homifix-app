@@ -248,55 +248,39 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
 
 
 
-  Widget _buildOrderCard(Map<String, dynamic> orderData, String orderId) {
+  Widget _buildOrderCard(Map<String, dynamic> orderData, String indexKey) {
     final serviceName = orderData['serviceName']?.toString() ??
         orderData['service']?.toString() ?? 'Unknown Service';
-    final customerName = orderData['customerName']?.toString() ?? 'Unknown Customer';
-    final status = orderData['status']?.toString() ?? 'pending';
-    final amount = orderData['amount']?.toString() ??
-        orderData['priceOffer']?.toString() ?? '0';
+    final status = orderData['completionStatus']?.toString() ?? 'pending';
     final address = orderData['address']?.toString() ??
         ((orderData['location'] != null && orderData['location'] is Map<String, dynamic>)
             ? orderData['location']['address'] ?? 'No address provided'
             : 'No address provided');
-    final phone = orderData['phone']?.toString() ?? 'No phone provided';
-
-    // Handle different timestamp formats
-    DateTime? createdAt;
-    DateTime? scheduledDate;
-
+    final amount = orderData['price']?.toString() ?? '0';
+    final orderId = orderData['orderId'] ?? indexKey;
+    DateTime? scheduledAt;
     try {
-      if (orderData['createdAt'] != null) {
-        if (orderData['createdAt'] is Timestamp) {
-          createdAt = (orderData['createdAt'] as Timestamp).toDate();
-        } else if (orderData['createdAt'] is String) {
-          createdAt = DateTime.parse(orderData['createdAt']);
-        }
-      }
+      final dateStr = orderData['date']?.toString();
+      final timeStr = orderData['time']?.toString();
 
-      if (orderData['scheduledDate'] != null) {
-        if (orderData['scheduledDate'] is Timestamp) {
-          scheduledDate = (orderData['scheduledDate'] as Timestamp).toDate();
-        } else if (orderData['scheduledDate'] is String) {
-          scheduledDate = DateTime.parse(orderData['scheduledDate']);
-        }
-      } else if (orderData['serviceDate'] != null) {
-        // Try to parse serviceDate as fallback
-        try {
-          if (orderData['serviceDate'] is String) {
-            final dateStr = orderData['serviceDate'] as String;
-            if (dateStr.contains('/')) {
-              scheduledDate = DateFormat('MM/dd/yyyy').parse(dateStr);
-            } else if (dateStr.contains('-')) {
-              scheduledDate = DateFormat('yyyy-MM-dd').parse(dateStr);
-            }
-          }
-        } catch (e) {
-          print('Error parsing serviceDate: $e');
-        }
+      if (dateStr != null && timeStr != null) {
+        final combined = '$dateStr $timeStr'; // e.g., "2025-06-16 1:32 PM"
+        scheduledAt = DateFormat('yyyy-MM-dd h:mm a').parse(combined);
       }
     } catch (e) {
-      print('Error parsing dates: $e');
+      print('Error parsing scheduled date & time: $e');
+    }
+
+
+    DateTime? createdAt;
+    try {
+      if (orderData['createdAt'] is Timestamp) {
+        createdAt = (orderData['createdAt'] as Timestamp).toDate();
+      } else if (orderData['createdAt'] is String) {
+        createdAt = DateTime.parse(orderData['createdAt']);
+      }
+    } catch (e) {
+      print('Error parsing createdAt: $e');
     }
 
     return Container(
@@ -317,7 +301,7 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Row
+            // Header
             Row(
               children: [
                 Container(
@@ -327,11 +311,7 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
                     color: const Color(0xFF22D3EE).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
-                    Icons.category,
-                    color: Color(0xFF22D3EE),
-                    size: 20,
-                  ),
+                  child: const Icon(Icons.category, color: Color(0xFF22D3EE), size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -350,82 +330,35 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
 
             const SizedBox(height: 16),
 
-            // Customer Info
-            _buildDetailItem(Icons.person_outline, 'Customer', customerName),
+            // Order ID
+            _buildDetailItem(Icons.receipt_outlined, 'Order ID', 'I$orderId'),
             const SizedBox(height: 8),
-
-            // Phone
-            if (phone != 'No phone provided')
-              _buildDetailItem(Icons.phone_outlined, 'Phone', phone),
-            if (phone != 'No phone provided') const SizedBox(height: 8),
 
             // Address
             _buildDetailItem(Icons.location_on_outlined, 'Address', address),
             const SizedBox(height: 8),
 
             // Amount
-            _buildDetailItem(Icons.attach_money, 'Amount', '₹$amount'),
-
-            const SizedBox(height: 16),
-
-            // Time Information
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF7FAFC),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+            _buildDetailItem(Icons.attach_money, 'Amount', 'Rs $amount'),
+            if (scheduledAt != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 24.0, top: 4.0),
+                child: Text(
+                  'Service Date: ${DateFormat('MMM dd, yyyy - hh:mm a').format(scheduledAt)}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF718096),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
-              child: Column(
-                children: [
-                  if (createdAt != null)
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.access_time,
-                          size: 16,
-                          color: Color(0xFF718096),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Ordered: ${DateFormat('MMM dd, yyyy - hh:mm a').format(createdAt)}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF4A5568),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                  if (scheduledDate != null) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.schedule,
-                          size: 16,
-                          color: Color(0xFF22D3EE),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Scheduled: ${DateFormat('MMM dd, yyyy').format(scheduledDate)}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF4A5568),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
           ],
         ),
       ),
     );
   }
+
+
 
   Widget _buildDetailItem(IconData icon, String label, String? value) {
     return Row(

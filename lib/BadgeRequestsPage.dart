@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'profilePage.dart';// Assuming you already have ProfilePage to view profile
+import 'package:home_services_app/professionalForCustomer.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -284,7 +284,7 @@ class _BadgeRequestsPageState extends State<BadgeRequestsPage> {
                                           Navigator.push(
                                             context,
                                             MaterialPageRoute(
-                                              builder: (_) => ProfilePage(userId: userId, isAdmin: true),
+                                              builder: (_) => ProfessionalForCustomer(userId: userId),
                                             ),
                                           );
                                         },
