@@ -42,6 +42,7 @@ dependencies:
 
   # Maps and Location
   geolocator: ^14.0.1
+
   geocoding: ^2.1.0
   google_maps_flutter: ^2.6.0
   flutter_map: ^6.1.0
@@ -57,6 +58,7 @@ dependencies:
 
   # App Icon
   flutter_launcher_icons: ^0.14.4
+
 
 dev_dependencies:
   flutter_test:

@@ -51,16 +51,13 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              'HomeServices',
-              style: TextStyle(
-                fontSize: 40,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue.shade800,
-                letterSpacing: 1.5,
-              ),
+            // App Icon Image
+            Image.asset(
+              'assets/app_icon.jpg',
+              width: 120,
+              height: 120,
+              fit: BoxFit.contain,
             ),
-
             const SizedBox(height: 16),
             Text(
               'Helping Hands for Your Home',

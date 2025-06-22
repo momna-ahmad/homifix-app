@@ -7,6 +7,7 @@ import 'landingPage.dart';
 import 'professionalSchedule.dart';
 import 'customerHistory.dart';
 import 'professionalProfile.dart';
+import 'customerProfile.dart';
 import 'adminDashboard.dart';
 import 'users.dart';
 import 'badgeRequestsPage.dart';
@@ -42,7 +43,7 @@ class _HomeNavPageState extends State<HomeNavPage> {
       _pages = [
         LandingPage(),
         CustomerOrdersPage(userId: widget.userId),
-        ProfilePage(userId: widget.userId),
+        CustomerProfile(userId: widget.userId),
         CustomerHistoryPage(userId: widget.userId),
       ];
     } else if (role == 'admin') {
