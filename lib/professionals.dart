@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:home_services_app/profilePage.dart';
+import 'professionalForCustomer.dart';
 import 'professional_orders_page.dart';
 
 class ProfessionalsPageWithOrders extends StatefulWidget {
@@ -72,12 +72,27 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
 
   Future<int> _getOrderCount(String professionalId) async {
     try {
-      final ordersSnap = await FirebaseFirestore.instance
-          .collection('orders')
-          .where('professionalId', isEqualTo: professionalId)
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(professionalId)
           .get();
 
-      return ordersSnap.docs.length;
+      if (docSnapshot.exists) {
+        final data = docSnapshot.data() as Map<String, dynamic>;
+        final orders = data['orders'] as List<dynamic>?;
+
+        if (orders == null) return 0;
+
+        // Filter orders with completionStatus == 'assigned' or 'completed'
+        final filtered = orders.where((order) {
+          final status = (order['completionStatus'] ?? '').toString().toLowerCase();
+          return status == 'assigned' || status == 'completed' || status == 'pending';
+        }).toList();
+
+        return filtered.length;
+      } else {
+        return 0;
+      }
     } catch (e) {
       print('Error fetching order count: $e');
       return 0;
@@ -88,37 +103,116 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
     return users.where((user) {
       final userData = user.data() as Map<String, dynamic>? ?? {};
       final name = (userData['name'] ?? '').toString().toLowerCase();
+
+      // Filter out reported users
+      final isReported = userData['isReported'] == true ||
+          userData['reported'] == true ||
+          userData['Reported'] == true;
+
       final matchesSearch = _searchQuery.isEmpty ||
           name.contains(_searchQuery.toLowerCase());
 
-      return matchesSearch;
+      return matchesSearch && !isReported; // Only show non-reported users
     }).toList();
+  }
+
+  Widget _buildOrderCountBadge(int orderCount, String professionalId, String professionalName) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProfessionalOrdersPage(
+              professionalId: professionalId,
+              professionalName: professionalName,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFF22D3EE),
+              const Color(0xFF0EA5E9),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF22D3EE).withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Text(
+          '$orderCount',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildYellowStarBadge() {
+    return Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBBF24), // Yellow color
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFBBF24).withOpacity(0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: const Icon(
+        Icons.star,
+        color: Colors.white,
+        size: 14,
+      ),
+    );
+  }
+
+  Widget _buildDefaultAvatar(String name) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF22D3EE),
+            const Color(0xFF0EA5E9),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: Center(
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : '?',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: const Text(
-          'All Professionals',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
-            color: Color(0xFF2D3748),
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF2D3748)),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-            height: 1,
-            color: const Color(0xFFE2E8F0),
-          ),
-        ),
-      ),
       body: Column(
         children: [
           // Search Bar
@@ -127,9 +221,9 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
             padding: const EdgeInsets.all(16.0),
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFF7FAFC),
+                color: const Color(0xFFECFDF5),
                 borderRadius: BorderRadius.circular(12.0),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: const Color(0xFF67E8F9)),
               ),
               child: TextField(
                 controller: _searchController,
@@ -141,7 +235,7 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                   ),
                   prefixIcon: Icon(
                     Icons.search,
-                    color: const Color(0xFF4299E1),
+                    color: const Color(0xFF22D3EE),
                     size: 22,
                   ),
                   border: InputBorder.none,
@@ -152,7 +246,7 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                 ),
                 style: const TextStyle(
                   fontSize: 16,
-                  color: Color(0xFF2D3748),
+                  color: Color(0xFF1A202C),
                 ),
                 onChanged: (value) {
                   setState(() {
@@ -174,7 +268,7 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4299E1)),
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF22D3EE)),
                     ),
                   );
                 }
@@ -273,21 +367,17 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                         userData['Name']?.toString() ??
                         userData['userName']?.toString() ?? 'No Name';
 
-                    final email = userData['email']?.toString() ??
-                        userData['Email']?.toString() ??
-                        userData['emailAddress']?.toString() ?? 'N/A';
-
                     final profileImageUrl = userData['profileImageUrl']?.toString() ??
                         userData['profileImage']?.toString() ??
                         userData['imageUrl']?.toString();
 
-                    final isReported = userData['isReported'] == true ||
-                        userData['reported'] == true ||
-                        userData['Reported'] == true;
-
                     final isDisabled = userData['isDisabled'] == true ||
                         userData['disabled'] == true ||
                         userData['Disabled'] == true;
+
+                    // Check badgeStatus directly from user data
+                    final badgeStatus = userData['badgeStatus']?.toString().toLowerCase();
+                    final showStar = badgeStatus == 'assigned';
 
                     final userId = user.id;
 
@@ -364,7 +454,7 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        // Name and Status Row
+                                        // Name and Order Count Row with Star
                                         Row(
                                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
@@ -374,48 +464,36 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                                                 style: const TextStyle(
                                                   fontWeight: FontWeight.w600,
                                                   fontSize: 18,
-                                                  color: Color(0xFF2D3748),
+                                                  color: Color(0xFF1A202C),
                                                 ),
                                               ),
                                             ),
-                                            if (isDisabled)
-                                              _buildStatusChip('Disabled', Colors.red),
-                                            if (isReported && !isDisabled)
-                                              _buildStatusChip('Reported', Colors.orange),
+                                            // Order count badge and star container
+                                            Row(
+                                              children: [
+                                                // Show yellow star if badgeStatus is assigned
+                                                if (showStar) ...[
+                                                  _buildYellowStarBadge(),
+                                                  const SizedBox(width: 8),
+                                                ],
+                                                // Order count badge
+                                                _buildOrderCountBadge(orderCount, userId, name),
+                                              ],
+                                            ),
                                           ],
                                         ),
 
                                         const SizedBox(height: 8),
 
-                                        // Order Count Badge
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFEDF2F7),
-                                            borderRadius: BorderRadius.circular(16),
-                                            border: Border.all(color: const Color(0xFF4A5568)),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(
-                                                Icons.receipt_long,
-                                                size: 14,
-                                                color: Color(0xFF4A5568),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                '$orderCount Orders',
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Color(0xFF4A5568),
-                                                ),
-                                              ),
-                                            ],
+                                        // Role/Category
+                                        Text(
+                                          'Professional',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Color(0xFF22D3EE),
+                                            fontWeight: FontWeight.w500,
                                           ),
                                         ),
-
                                         const SizedBox(height: 8),
 
                                         // Categories
@@ -426,16 +504,16 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                                             return Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                               decoration: BoxDecoration(
-                                                color: const Color(0xFFEBF8FF),
+                                                color: const Color(0xFFECFDF5),
                                                 borderRadius: BorderRadius.circular(16),
-                                                border: Border.all(color: const Color(0xFF4299E1)),
+                                                border: Border.all(color: const Color(0xFF67E8F9)),
                                               ),
                                               child: Text(
                                                 category,
                                                 style: const TextStyle(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w500,
-                                                  color: Color(0xFF2B6CB0),
+                                                  color: Color(0xFF22D3EE),
                                                 ),
                                               ),
                                             );
@@ -470,33 +548,15 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                                           ],
                                         ),
 
+                                        // Status Chips - Only show disabled status
+                                        if (isDisabled) ...[
+                                          const SizedBox(height: 8),
+                                          _buildStatusChip('Disabled', const Color(0xFFDC2626)),
+                                        ],
+
                                         const SizedBox(height: 16),
 
-                                        // Action Buttons
-                                        if (isReported && !isDisabled)
-                                          SizedBox(
-                                            width: double.infinity,
-                                            child: ElevatedButton(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFFE53E3E),
-                                                foregroundColor: Colors.white,
-                                                elevation: 0,
-                                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                ),
-                                              ),
-                                              onPressed: () => _disableUser(userId, context),
-                                              child: const Text(
-                                                'Disable',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 14,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-
+                                        // Show disabled status
                                         if (isDisabled)
                                           SizedBox(
                                             width: double.infinity,
@@ -565,7 +625,7 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF2D3748),
+                  color: Color(0xFF1A202C),
                 ),
               ),
 
@@ -575,7 +635,7 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
               ListTile(
                 leading: const Icon(
                   Icons.person_outline,
-                  color: Color(0xFF4299E1),
+                  color: Color(0xFF22D3EE),
                 ),
                 title: const Text(
                   'View Profile',
@@ -589,10 +649,7 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => ProfilePage(
-                        userId: userId,
-                        isAdmin: true,
-                      ),
+                      builder: (_) => ProfessionalForCustomer(userId: userId),
                     ),
                   );
                 },
@@ -602,7 +659,7 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
               ListTile(
                 leading: const Icon(
                   Icons.receipt_long_outlined,
-                  color: Color(0xFF38A169),
+                  color: Color(0xFF059669),
                 ),
                 title: Text(
                   'View Orders ($orderCount)',
@@ -633,31 +690,6 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
     );
   }
 
-  Widget _buildDefaultAvatar(String name) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFF4299E1),
-            const Color(0xFF3182CE),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Center(
-        child: Text(
-          name.isNotEmpty ? name[0].toUpperCase() : '?',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildStatusChip(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -673,98 +705,6 @@ class _ProfessionalsPageWithOrdersState extends State<ProfessionalsPageWithOrder
           fontWeight: FontWeight.w600,
         ),
       ),
-    );
-  }
-
-  void _disableUser(String userId, BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text(
-            'Disable User',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF2D3748),
-            ),
-          ),
-          content: const Text(
-            'Are you sure you want to disable this user? They will not be able to work until enabled again.',
-            style: TextStyle(
-              color: Color(0xFF4A5568),
-              fontSize: 16,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(
-                  color: Color(0xFF718096),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE53E3E),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: () async {
-                try {
-                  await FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(userId)
-                      .update({
-                    'isDisabled': true,
-                    'disabledAt': FieldValue.serverTimestamp(),
-                  });
-
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('User has been disabled'),
-                        backgroundColor: const Color(0xFF38A169),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error disabling user: $e'),
-                        backgroundColor: const Color(0xFFE53E3E),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    );
-                  }
-                }
-              },
-              child: const Text(
-                'Disable',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 

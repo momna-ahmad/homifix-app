@@ -12,6 +12,7 @@ import 'adminDashboard.dart';
 import 'users.dart';
 import 'badgeRequestsPage.dart';
 import 'adminOrders.dart';
+import 'requests.dart';
 
 class HomeNavPage extends StatefulWidget {
   final String userId;
@@ -51,7 +52,7 @@ class _HomeNavPageState extends State<HomeNavPage> {
         AdminDashboard(),
         UserSchedule(userId: widget.userId),
         AdminOrders(),
-        BadgeRequestsPage(),
+        UserRequests(userId: widget.userId), // Capitalized class name
       ];
     } else {
       _pages = [const Center(child: Text("Unknown role"))];
@@ -197,7 +198,7 @@ class _HomeNavPageState extends State<HomeNavPage> {
         case 2:
           return Icons.shopping_cart_rounded;
         default:
-          return Icons.verified_rounded;
+          return Icons.assignment_turned_in_rounded;
       }
     } else {
       // client
@@ -235,7 +236,7 @@ class _HomeNavPageState extends State<HomeNavPage> {
         case 2:
           return 'Orders';
         default:
-          return 'Badges';
+          return 'Requests';
       }
     } else {
       switch (index) {

@@ -108,7 +108,6 @@ class CustomersPage extends StatefulWidget {
   State<CustomersPage> createState() => _CustomersPageState();
 }
 
-
 class _CustomersPageState extends State<CustomersPage> {
   final CustomersService _customersService = CustomersService();
   final TextEditingController _searchController = TextEditingController();
@@ -164,8 +163,8 @@ class _CustomersPageState extends State<CustomersPage> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF4299E1),
-            const Color(0xFF3182CE),
+            const Color(0xFF22D3EE),
+            const Color(0xFF0EA5E9),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -191,8 +190,8 @@ class _CustomersPageState extends State<CustomersPage> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF4299E1),
-            const Color(0xFF3182CE),
+            const Color(0xFF22D3EE),
+            const Color(0xFF0EA5E9),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -200,7 +199,7 @@ class _CustomersPageState extends State<CustomersPage> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4299E1).withOpacity(0.3),
+            color: const Color(0xFF22D3EE).withOpacity(0.3),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -279,7 +278,7 @@ class _CustomersPageState extends State<CustomersPage> {
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 18,
-                            color: Color(0xFF2D3748),
+                            color: Color(0xFF1A202C),
                           ),
                         ),
                       ),
@@ -297,7 +296,6 @@ class _CustomersPageState extends State<CustomersPage> {
                         },
                         child: _buildOrderCountBadge(customer.orderCount),
                       ),
-
                     ],
                   ),
 
@@ -308,7 +306,7 @@ class _CustomersPageState extends State<CustomersPage> {
                     'Customer',
                     style: const TextStyle(
                       fontSize: 14,
-                      color: Color(0xFF4299E1),
+                      color: Color(0xFF22D3EE),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -371,7 +369,7 @@ class _CustomersPageState extends State<CustomersPage> {
     if (_isLoading) {
       return const Center(
         child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4299E1)),
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF22D3EE)),
         ),
       );
     }
@@ -398,7 +396,7 @@ class _CustomersPageState extends State<CustomersPage> {
             const SizedBox(height: 16),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4299E1),
+                backgroundColor: const Color(0xFF22D3EE),
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
@@ -475,38 +473,17 @@ class _CustomersPageState extends State<CustomersPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: const Text(
-          'Customers',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
-            color: Color(0xFF2D3748),
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF2D3748)),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-            height: 1,
-            color: const Color(0xFFE2E8F0),
-          ),
-        ),
-      ),
+      backgroundColor: const Color(0xFFF7FAFC),
       body: Column(
         children: [
-          // Search Bar
           Container(
             color: Colors.white,
             padding: const EdgeInsets.all(16.0),
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFF7FAFC),
+                color: const Color(0xFFECFDF5),
                 borderRadius: BorderRadius.circular(12.0),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: const Color(0xFF67E8F9)),
               ),
               child: TextField(
                 controller: _searchController,
@@ -518,7 +495,7 @@ class _CustomersPageState extends State<CustomersPage> {
                   ),
                   prefixIcon: Icon(
                     Icons.search,
-                    color: const Color(0xFF4299E1),
+                    color: const Color(0xFF22D3EE),
                     size: 22,
                   ),
                   border: InputBorder.none,
@@ -529,7 +506,7 @@ class _CustomersPageState extends State<CustomersPage> {
                 ),
                 style: const TextStyle(
                   fontSize: 16,
-                  color: Color(0xFF2D3748),
+                  color: Color(0xFF1A202C),
                 ),
                 onChanged: _filterCustomers,
               ),
@@ -542,7 +519,7 @@ class _CustomersPageState extends State<CustomersPage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _loadCustomers,
-        backgroundColor: const Color(0xFF4299E1),
+        backgroundColor: const Color(0xFF22D3EE),
         foregroundColor: Colors.white,
         elevation: 4,
         child: const Icon(Icons.refresh),
@@ -584,8 +561,8 @@ class _CustomersStreamPageState extends State<CustomersStreamPage> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF4299E1),
-            const Color(0xFF3182CE),
+            const Color(0xFF22D3EE),
+            const Color(0xFF0EA5E9),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -611,8 +588,8 @@ class _CustomersStreamPageState extends State<CustomersStreamPage> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF4299E1),
-            const Color(0xFF3182CE),
+            const Color(0xFF22D3EE),
+            const Color(0xFF0EA5E9),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -620,7 +597,7 @@ class _CustomersStreamPageState extends State<CustomersStreamPage> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4299E1).withOpacity(0.3),
+            color: const Color(0xFF22D3EE).withOpacity(0.3),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -699,7 +676,7 @@ class _CustomersStreamPageState extends State<CustomersStreamPage> {
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 18,
-                            color: Color(0xFF2D3748),
+                            color: Color(0xFF1A202C),
                           ),
                         ),
                       ),
@@ -714,7 +691,7 @@ class _CustomersStreamPageState extends State<CustomersStreamPage> {
                     'Customer',
                     style: const TextStyle(
                       fontSize: 14,
-                      color: Color(0xFF4299E1),
+                      color: Color(0xFF22D3EE),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -776,19 +753,19 @@ class _CustomersStreamPageState extends State<CustomersStreamPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF7FAFC),
       appBar: AppBar(
         title: const Text(
           'Live Customers',
           style: TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 20,
-            color: Color(0xFF2D3748),
+            color: Color(0xFF1A202C),
           ),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF2D3748)),
+        iconTheme: const IconThemeData(color: Color(0xFF1A202C)),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(
@@ -799,15 +776,96 @@ class _CustomersStreamPageState extends State<CustomersStreamPage> {
       ),
       body: Column(
         children: [
+          // Stay Organized Card
+          Container(
+            margin: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF22D3EE),
+                  Color(0xFF0EA5E9),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16.0),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Live Customer Tracking',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Real-time customer updates and monitoring',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white70,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            // Add your functionality here
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF22D3EE),
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'View Dashboard',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.people,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
           // Search Bar
           Container(
             color: Colors.white,
             padding: const EdgeInsets.all(16.0),
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFF7FAFC),
+                color: const Color(0xFFECFDF5),
                 borderRadius: BorderRadius.circular(12.0),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: const Color(0xFF67E8F9)),
               ),
               child: TextField(
                 controller: _searchController,
@@ -819,7 +877,7 @@ class _CustomersStreamPageState extends State<CustomersStreamPage> {
                   ),
                   prefixIcon: Icon(
                     Icons.search,
-                    color: const Color(0xFF4299E1),
+                    color: const Color(0xFF22D3EE),
                     size: 22,
                   ),
                   border: InputBorder.none,
@@ -830,7 +888,7 @@ class _CustomersStreamPageState extends State<CustomersStreamPage> {
                 ),
                 style: const TextStyle(
                   fontSize: 16,
-                  color: Color(0xFF2D3748),
+                  color: Color(0xFF1A202C),
                 ),
                 onChanged: (value) {
                   setState(() {
@@ -873,7 +931,7 @@ class _CustomersStreamPageState extends State<CustomersStreamPage> {
                 if (!snapshot.hasData) {
                   return const Center(
                     child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4299E1)),
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF22D3EE)),
                     ),
                   );
                 }
