@@ -115,27 +115,30 @@ class _HomeNavPageState extends State<HomeNavPage> {
                   final label = _getSelectedLabel(role, index);
 
                   return Expanded(
-                    child: GestureDetector(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(30),
                       onTap: () => _onItemTapped(index),
-                      child: SizedBox(
+                      child: Container(
                         height: 60,
-                        child: Column(
+                        alignment: Alignment.center,
+                        child: !isSelected
+                            ? Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            if (!isSelected) ...[
-                              Icon(icon, color: const Color(0xFF64748B), size: 20),
-                              const SizedBox(height: 4),
-                              Text(label,
-                                  style: const TextStyle(
-                                      color: Color(0xFF64748B),
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w500)),
-                            ],
+                            Icon(icon, color: const Color(0xFF64748B), size: 20),
+                            const SizedBox(height: 4),
+                            Text(label,
+                                style: const TextStyle(
+                                    color: Color(0xFF64748B),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500)),
                           ],
-                        ),
+                        )
+                            : const SizedBox.shrink(), // hide because it's drawn by the animated bubble
                       ),
                     ),
                   );
+
                 }),
               ),
             ),

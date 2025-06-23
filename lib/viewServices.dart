@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'warningDisplay.dart' ;
 
 class ViewServicesPage extends StatelessWidget {
   final String userId;
@@ -14,6 +15,63 @@ class ViewServicesPage extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
   });
+
+  // Function to show the warnings dialog
+  void _showWarningsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  spreadRadius: 0,
+                  blurRadius: 15,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Your Warnings',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.grey),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const Divider(),
+                // Render the new WarningsDisplay widget
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+                  child: WarningsDisplay(userId: userId),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +92,57 @@ class ViewServicesPage extends StatelessWidget {
         elevation: 0,
         iconTheme: const IconThemeData(color: Color(0xFF1E293B)),
         actions: [
+          // Notification Icon with Badge
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox.shrink(); // Hide icon while loading
+              }
+              if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
+                return const SizedBox.shrink(); // Hide icon on error or no data
+              }
+
+              final userData = snapshot.data!.data() as Map<String, dynamic>?;
+              final warnings = (userData?['warnings'] as List<dynamic>?) ?? [];
+              final hasWarnings = warnings.isNotEmpty;
+
+              return Stack(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(right: 16),
+                    child: CircleAvatar(
+                      radius: 18,
+                      backgroundColor: const Color(0xFF22D3EE),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.notifications_none, // Notification icon
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        onPressed: () => _showWarningsDialog(context),
+                        tooltip: "View Warnings",
+                      ),
+                    ),
+                  ),
+                  if (hasWarnings)
+                    Positioned(
+                      right: 18, // Adjust positioning as needed for your UI
+                      top: 8,    // Adjust positioning as needed for your UI
+                      child: Container(
+                        width: 10,   // Diameter of the red dot
+                        height: 10,  // Diameter of the red dot
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle, // Make it a circle
+                          border: Border.all(color: Colors.white, width: 1.5), // White border
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
           Container(
             margin: const EdgeInsets.only(right: 16),
             child: CircleAvatar(
@@ -137,7 +246,7 @@ class ViewServicesPage extends StatelessWidget {
 
             const SizedBox(height: 30),
 
-            // Top Services Section
+            // Your Services Section
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
@@ -234,7 +343,7 @@ class ViewServicesPage extends StatelessWidget {
 
   Widget _buildServiceCard(BuildContext context, Map<String, dynamic> data, DocumentSnapshot service, bool isProfessional) {
     final serviceName = data['service'] ?? 'House Cleaning';
-    final category = data['category'] ?? 'Cleaning';
+    // final category = data['category'] ?? 'Cleaning'; // Category is not used here directly
     final price = data['price'] ?? '35';
     final rating = data['rating'] ?? '4.8';
     final imageUrls = List<String>.from(data['imageUrls'] ?? []);
