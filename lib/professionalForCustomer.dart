@@ -1,10 +1,52 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'dart:async';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-// Enhanced Customer Profile Image Carousel Widget
+// ✅ NOTIFICATION API CONFIGURATION
+const String notificationApiUrl = 'http://10.0.2.2:5000/send-notification';
+
+// ✅ Push notification function
+Future<void> sendPushNotification({
+  required String targetFcmToken,
+  required String title,
+  required String body,
+}) async {
+  try {
+    final response = await http.post(
+      Uri.parse(notificationApiUrl),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'fcmToken': targetFcmToken,
+        'title': title,
+        'body': body,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      print('✅ Push notification sent successfully');
+    } else {
+      print('❌ Failed to send notification: ${response.body}');
+    }
+  } catch (e) {
+    print('🚨 Error sending notification: $e');
+  }
+}
+
+// ✅ Local notification function
+Future<void> showLocalNotification(String title, String body) async {
+  try {
+    print('📱 Local Notification: $title - $body');
+  } catch (e) {
+    print('❌ Error showing local notification: $e');
+  }
+}
+
 class CustomerProfileCarousel extends StatefulWidget {
   final String customerId;
   final double size;
@@ -26,14 +68,8 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
   Timer? _autoScrollTimer;
   int _currentIndex = 0;
 
-  @override
-  void initState() {
-    super.initState();
-  }
-
   void _startAutoScroll(List<String> images) {
     if (images.length <= 1) return;
-
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (mounted && _pageController != null && _pageController!.hasClients) {
         final nextIndex = (_currentIndex + 1) % images.length;
@@ -56,10 +92,7 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.customerId)
-          .get(),
+      future: FirebaseFirestore.instance.collection('users').doc(widget.customerId).get(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Container(
@@ -68,17 +101,9 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Colors.grey[200],
-              border: widget.showBorder
-                  ? Border.all(color: Colors.blue.shade200, width: 2)
-                  : null,
+              border: widget.showBorder ? Border.all(color: Colors.blue.shade200, width: 2) : null,
             ),
-            child: const Center(
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
+            child: const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
           );
         }
 
@@ -88,25 +113,17 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
 
         final userData = snapshot.data!.data() as Map<String, dynamic>;
         final customerName = userData['name'] ?? 'Customer';
-
-        // Get profile images - handle both single image and multiple images
         List<String> profileImages = [];
 
-        if (userData['profileImage'] != null) {
-          if (userData['profileImage'] is String && userData['profileImage'].isNotEmpty) {
-            profileImages.add(userData['profileImage']);
-          }
+        if (userData['profileImage'] != null && userData['profileImage'].toString().isNotEmpty) {
+          profileImages.add(userData['profileImage']);
         }
 
-        // Check for additional profile images (if user has multiple photos)
         if (userData['profileImages'] != null && userData['profileImages'] is List) {
-          final additionalImages = List<String>.from(userData['profileImages'])
-              .where((url) => url.isNotEmpty)
-              .toList();
+          final additionalImages = List<String>.from(userData['profileImages']).where((url) => url.isNotEmpty).toList();
           profileImages.addAll(additionalImages);
         }
 
-        // Remove duplicates
         profileImages = profileImages.toSet().toList();
 
         if (profileImages.isEmpty) {
@@ -117,7 +134,6 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
           return _buildSingleImage(profileImages[0], customerName);
         }
 
-        // Multiple images - use carousel
         return _buildImageCarousel(profileImages, customerName);
       },
     );
@@ -130,9 +146,7 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: Colors.blue.shade100,
-        border: widget.showBorder
-            ? Border.all(color: Colors.blue.shade200, width: 2)
-            : null,
+        border: widget.showBorder ? Border.all(color: Colors.blue.shade200, width: 2) : null,
       ),
       child: Center(
         child: Text(
@@ -153,9 +167,7 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
       height: widget.size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: widget.showBorder
-            ? Border.all(color: Colors.blue.shade200, width: 2)
-            : null,
+        border: widget.showBorder ? Border.all(color: Colors.blue.shade200, width: 2) : null,
       ),
       child: ClipOval(
         child: Image.network(
@@ -164,31 +176,7 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
           height: widget.size,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) => _buildDefaultAvatar(
-              customerName.isNotEmpty ? customerName[0].toUpperCase() : 'C'
-          ),
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Container(
-              width: widget.size,
-              height: widget.size,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.grey[200],
-              ),
-              child: Center(
-                child: SizedBox(
-                  width: widget.size * 0.3,
-                  height: widget.size * 0.3,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                        : null,
-                  ),
-                ),
-              ),
-            );
-          },
+              customerName.isNotEmpty ? customerName[0].toUpperCase() : 'C'),
         ),
       ),
     );
@@ -205,9 +193,7 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
       height: widget.size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: widget.showBorder
-            ? Border.all(color: Colors.blue.shade200, width: 2)
-            : null,
+        border: widget.showBorder ? Border.all(color: Colors.blue.shade200, width: 2) : null,
       ),
       child: Stack(
         children: [
@@ -216,11 +202,7 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
               controller: _pageController,
               itemCount: images.length,
               onPageChanged: (index) {
-                if (mounted) {
-                  setState(() {
-                    _currentIndex = index;
-                  });
-                }
+                if (mounted) setState(() => _currentIndex = index);
               },
               itemBuilder: (context, index) {
                 return Image.network(
@@ -229,13 +211,11 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
                   height: widget.size,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => _buildDefaultAvatar(
-                      customerName.isNotEmpty ? customerName[0].toUpperCase() : 'C'
-                  ),
+                      customerName.isNotEmpty ? customerName[0].toUpperCase() : 'C'),
                 );
               },
             ),
           ),
-          // Image indicators for multiple images
           if (images.length > 1)
             Positioned(
               bottom: 4,
@@ -251,33 +231,20 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
                     margin: const EdgeInsets.symmetric(horizontal: 1),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _currentIndex == index
-                          ? Colors.white
-                          : Colors.white.withOpacity(0.5),
+                      color: _currentIndex == index ? Colors.white : Colors.white.withOpacity(0.5),
                     ),
                   ),
                 ),
               ),
             ),
-          // Multiple images indicator
           if (images.length > 1)
             Positioned(
               top: 2,
               right: 2,
               child: Container(
                 padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade600,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  '${images.length}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                decoration: BoxDecoration(color: Colors.blue.shade600, shape: BoxShape.circle),
+                child: Text('${images.length}', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
               ),
             ),
         ],
@@ -286,16 +253,12 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
   }
 }
 
-// Separate widget for service image carousel to prevent shivering
+// ✅ Service Image Carousel Widget
 class ServiceImageCarousel extends StatefulWidget {
   final List<String> imageUrls;
   final String serviceId;
 
-  const ServiceImageCarousel({
-    Key? key,
-    required this.imageUrls,
-    required this.serviceId,
-  }) : super(key: key);
+  const ServiceImageCarousel({Key? key, required this.imageUrls, required this.serviceId}) : super(key: key);
 
   @override
   State<ServiceImageCarousel> createState() => _ServiceImageCarouselState();
@@ -317,15 +280,10 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
 
   void _startAutoScroll() {
     if (widget.imageUrls.length <= 1) return;
-
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       if (mounted && _pageController != null && _pageController!.hasClients) {
         final nextIndex = (_currentIndex + 1) % widget.imageUrls.length;
-        _pageController!.animateToPage(
-          nextIndex,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
+        _pageController!.animateToPage(nextIndex, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
       }
     });
   }
@@ -343,15 +301,8 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
       return Container(
         width: 60,
         height: 60,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: Colors.blue.shade100,
-        ),
-        child: Icon(
-          Icons.work,
-          color: Colors.blue.shade700,
-          size: 24,
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), color: Colors.blue.shade100),
+        child: Icon(Icons.work, color: Colors.blue.shade700, size: 24),
       );
     }
 
@@ -359,9 +310,7 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
       return Container(
         width: 60,
         height: 60,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: Image.network(
@@ -373,28 +322,8 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
               width: 60,
               height: 60,
               color: Colors.blue.shade100,
-              child: Icon(
-                Icons.work,
-                color: Colors.blue.shade700,
-                size: 24,
-              ),
+              child: Icon(Icons.work, color: Colors.blue.shade700, size: 24),
             ),
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return Container(
-                width: 60,
-                height: 60,
-                color: Colors.blue.shade100,
-                child: Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                        : null,
-                    strokeWidth: 2,
-                  ),
-                ),
-              );
-            },
           ),
         ),
       );
@@ -403,9 +332,7 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
     return Container(
       width: 60,
       height: 60,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
       child: Stack(
         children: [
           ClipRRect(
@@ -413,28 +340,19 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
             child: PageView.builder(
               controller: _pageController,
               itemCount: widget.imageUrls.length,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentIndex = index;
-                });
-              },
+              onPageChanged: (index) => setState(() => _currentIndex = index),
               itemBuilder: (context, index) {
                 return Image.network(
                   widget.imageUrls[index],
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => Container(
                     color: Colors.blue.shade100,
-                    child: Icon(
-                      Icons.work,
-                      color: Colors.blue.shade700,
-                      size: 24,
-                    ),
+                    child: Icon(Icons.work, color: Colors.blue.shade700, size: 24),
                   ),
                 );
               },
             ),
           ),
-          // Image indicators for multiple images
           if (widget.imageUrls.length > 1)
             Positioned(
               bottom: 4,
@@ -450,9 +368,7 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
                     margin: const EdgeInsets.symmetric(horizontal: 1),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _currentIndex == index
-                          ? Colors.white
-                          : Colors.white.withOpacity(0.5),
+                      color: _currentIndex == index ? Colors.white : Colors.white.withOpacity(0.5),
                     ),
                   ),
                 ),
@@ -464,14 +380,11 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
   }
 }
 
-// ENHANCED Review carousel with CustomerProfileCarousel integration
+// ✅ Review Carousel with Customer Profile Integration
 class ReviewCarousel extends StatefulWidget {
   final List<QueryDocumentSnapshot> reviews;
 
-  const ReviewCarousel({
-    Key? key,
-    required this.reviews,
-  }) : super(key: key);
+  const ReviewCarousel({Key? key, required this.reviews}) : super(key: key);
 
   @override
   State<ReviewCarousel> createState() => _ReviewCarouselState();
@@ -510,68 +423,6 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
     }
   }
 
-  void _showCustomerProfileDialog(BuildContext context, String customerId) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Customer Profile',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              CustomerProfileCarousel(
-                customerId: customerId,
-                size: 120.0,
-                showBorder: true,
-              ),
-              const SizedBox(height: 16),
-              FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(customerId)
-                    .get(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const CircularProgressIndicator();
-                  }
-
-                  final userData = snapshot.data!.data() as Map<String, dynamic>?;
-                  final customerName = userData?['name'] ?? 'Anonymous';
-
-                  return Text(
-                    customerName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
@@ -579,27 +430,15 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
     if (widget.reviews.isEmpty) {
       return Card(
         elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Icon(
-                Icons.rate_review_outlined,
-                size: 48,
-                color: Colors.grey.shade400,
-              ),
+              Icon(Icons.rate_review_outlined, size: 48, color: Colors.grey.shade400),
               const SizedBox(height: 12),
-              Text(
-                'No reviews available yet.',
-                style: theme.bodyLarge?.copyWith(
-                  color: Colors.grey.shade600,
-                ),
-                textAlign: TextAlign.center,
-              ),
+              Text('No reviews available yet.', style: theme.bodyLarge?.copyWith(color: Colors.grey.shade600), textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -607,21 +446,15 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
     }
 
     return SizedBox(
-      height: 240, // Fixed height to prevent layout shifts
+      height: 240,
       child: Column(
         children: [
-          // Review PageView - COMPLETELY ISOLATED
           Expanded(
             child: PageView.builder(
               controller: _pageController,
-              // Use ClampingScrollPhysics to prevent interference
               physics: const ClampingScrollPhysics(),
               onPageChanged: (index) {
-                if (mounted) {
-                  setState(() {
-                    _currentIndex = index;
-                  });
-                }
+                if (mounted) setState(() => _currentIndex = index);
               },
               itemCount: widget.reviews.length,
               itemBuilder: (context, index) {
@@ -632,9 +465,7 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   child: Card(
                     elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -642,10 +473,7 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [
-                            Colors.lightBlue.shade50,
-                            Colors.white,
-                          ],
+                          colors: [Colors.lightBlue.shade50, Colors.white],
                         ),
                       ),
                       child: Column(
@@ -653,28 +481,13 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
                         children: [
                           Row(
                             children: [
-                              // ✅ ENHANCED: Use CustomerProfileCarousel instead of simple CircleAvatar
-                              GestureDetector(
-                                onTap: () {
-                                  // Show customer profile dialog with all images
-                                  _showCustomerProfileDialog(context, customerId);
-                                },
-                                child: CustomerProfileCarousel(
-                                  customerId: customerId,
-                                  size: 40.0,
-                                  showBorder: true,
-                                ),
-                              ),
+                              CustomerProfileCarousel(customerId: customerId, size: 40.0, showBorder: true),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: FutureBuilder<DocumentSnapshot>(
-                                  future: FirebaseFirestore.instance
-                                      .collection('users')
-                                      .doc(customerId)
-                                      .get(),
+                                  future: FirebaseFirestore.instance.collection('users').doc(customerId).get(),
                                   builder: (context, customerSnapshot) {
                                     String customerName = 'Anonymous';
-
                                     if (customerSnapshot.hasData && customerSnapshot.data!.exists) {
                                       final customerData = customerSnapshot.data!.data() as Map<String, dynamic>;
                                       customerName = customerData['name'] ?? 'Anonymous';
@@ -683,21 +496,13 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
                                     return Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          customerName,
-                                          style: theme.titleSmall?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15,
-                                          ),
-                                        ),
+                                        Text(customerName, style: theme.titleSmall?.copyWith(fontWeight: FontWeight.bold, fontSize: 15)),
                                         const SizedBox(height: 4),
                                         Row(
                                           children: List.generate(5, (starIndex) {
                                             final rating = review['rating'] ?? 0;
                                             return Icon(
-                                              starIndex < rating
-                                                  ? Icons.star
-                                                  : Icons.star_border,
+                                              starIndex < rating ? Icons.star : Icons.star_border,
                                               color: Colors.blue,
                                               size: 16,
                                             );
@@ -714,21 +519,13 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
                           Expanded(
                             child: SingleChildScrollView(
                               physics: const ClampingScrollPhysics(),
-                              child: Text(
-                                review['reviewText'] ?? 'No review text provided.',
-                                style: theme.bodySmall?.copyWith(fontSize: 14),
-                              ),
+                              child: Text(review['reviewText'] ?? 'No review text provided.', style: theme.bodySmall?.copyWith(fontSize: 14)),
                             ),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            review['timestamp'] != null
-                                ? _formatTimestamp(review['timestamp'])
-                                : 'Recent',
-                            style: theme.bodySmall?.copyWith(
-                              color: Colors.grey.shade600,
-                              fontSize: 12,
-                            ),
+                            review['timestamp'] != null ? _formatTimestamp(review['timestamp']) : 'Recent',
+                            style: theme.bodySmall?.copyWith(color: Colors.grey.shade600, fontSize: 12),
                           ),
                         ],
                       ),
@@ -738,8 +535,6 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
               },
             ),
           ),
-
-          // Review indicators - Fixed position
           const SizedBox(height: 12),
           if (widget.reviews.length > 1)
             Row(
@@ -753,9 +548,7 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
                   height: 8,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(4),
-                    color: _currentIndex == index
-                        ? Colors.blue.shade600
-                        : Colors.grey.shade300,
+                    color: _currentIndex == index ? Colors.blue.shade600 : Colors.grey.shade300,
                   ),
                 ),
               ),
@@ -766,6 +559,231 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
   }
 }
 
+// ✅ Report Service with proper notification handling
+class ReportService {
+  static Future<void> submitReport({
+    required BuildContext context,
+    required String reportedProfessionalId,
+    required String reportedProfessionalName,
+    required String reportReason,
+    required String customerId,
+    required String customerName,
+  }) async {
+    if (reportedProfessionalId.isEmpty || customerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.warning, color: Colors.white),
+              SizedBox(width: 12),
+              Text('Invalid user information. Please try again.'),
+            ],
+          ),
+          backgroundColor: const Color(0xFFF59E0B),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+      return;
+    }
+
+    try {
+      // 1. Create report document
+      final reportDoc = await FirebaseFirestore.instance.collection('reports').add({
+        'reportedProfessionalId': reportedProfessionalId,
+        'reportedProfessionalName': reportedProfessionalName,
+        'reportReason': reportReason,
+        'customerId': customerId,
+        'customerName': customerName,
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': 'pending',
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+
+      // 2. Update professional's report count
+      final professionalRef = FirebaseFirestore.instance.collection('users').doc(reportedProfessionalId);
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final professionalDoc = await transaction.get(professionalRef);
+        if (professionalDoc.exists) {
+          final currentData = professionalDoc.data() as Map<String, dynamic>;
+          final currentReportCount = currentData['reportCount'] ?? 0;
+          transaction.update(professionalRef, {
+            'reportCount': currentReportCount + 1,
+            'lastReportedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      });
+
+      // 3. Show immediate success feedback
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Report submitted successfully'),
+              ],
+            ),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+
+      // 4. Handle notifications asynchronously
+      _handleNotificationsAsync(context, reportedProfessionalName, customerName, reportReason, reportDoc.id);
+
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Error submitting report: $e')),
+              ],
+            ),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+      rethrow;
+    }
+  }
+
+  static void _handleNotificationsAsync(
+      BuildContext context,
+      String professionalName,
+      String customerName,
+      String reportReason,
+      String reportId,
+      ) async {
+    try {
+      await showLocalNotification(
+        'Report Submitted',
+        'Your report against $professionalName has been sent to the admin.',
+      );
+
+      final adminFcmToken = await _getAdminFcmToken();
+      bool notificationSent = false;
+
+      if (adminFcmToken != null && adminFcmToken.isNotEmpty) {
+        await sendPushNotification(
+          targetFcmToken: adminFcmToken,
+          title: "⚠️ New Professional Report",
+          body: "$customerName reported $professionalName for: $reportReason",
+        );
+        notificationSent = true;
+      }
+
+      await _createAdminInAppNotification(
+        professionalName: professionalName,
+        customerName: customerName,
+        reportReason: reportReason,
+        reportId: reportId,
+      );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.notifications_active, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    notificationSent
+                        ? 'Admin has been notified about your report'
+                        : 'Report saved. Admin will be notified shortly.',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.blue.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+
+    } catch (e) {
+      print('❌ Error in notification handling: $e');
+    }
+  }
+
+  static Future<void> _createAdminInAppNotification({
+    required String professionalName,
+    required String customerName,
+    required String reportReason,
+    required String reportId,
+  }) async {
+    try {
+      await FirebaseFirestore.instance.collection('admin_notifications').add({
+        'type': 'professional_report',
+        'title': 'Professional Reported',
+        'message': '$customerName reported $professionalName for: $reportReason',
+        'reportId': reportId,
+        'professionalName': professionalName,
+        'customerName': customerName,
+        'reportReason': reportReason,
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+        'priority': 'high',
+      });
+    } catch (e) {
+      print('❌ Error creating in-app notification: $e');
+    }
+  }
+
+  static Future<String?> _getAdminFcmToken() async {
+    try {
+      final adminSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'Admin')
+          .limit(1)
+          .get();
+
+      if (adminSnapshot.docs.isNotEmpty) {
+        final adminData = adminSnapshot.docs.first.data();
+        final fcmToken = adminData['fcmToken'];
+        if (fcmToken != null && fcmToken.toString().trim().isNotEmpty) {
+          return fcmToken.toString().trim();
+        }
+      }
+
+      final fallbackSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'Admin')
+          .limit(1)
+          .get();
+
+      if (fallbackSnapshot.docs.isNotEmpty) {
+        final adminData = fallbackSnapshot.docs.first.data();
+        final fcmToken = adminData['fcmToken'];
+        if (fcmToken != null && fcmToken.toString().trim().isNotEmpty) {
+          return fcmToken.toString().trim();
+        }
+      }
+
+      return null;
+    } catch (e) {
+      print('❌ Error fetching admin FCM token: $e');
+      return null;
+    }
+  }
+}
+
+// ✅ MAIN CLASS: ProfessionalForCustomer with UI FIXES
 class ProfessionalForCustomer extends StatefulWidget {
   final String userId;
   const ProfessionalForCustomer({super.key, required this.userId});
@@ -775,12 +793,7 @@ class ProfessionalForCustomer extends StatefulWidget {
 }
 
 class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
-  @override
-  void dispose() {
-    super.dispose();
-  }
 
-  // Calculate average rating
   double _calculateAverageRating(List<dynamic> reviews) {
     if (reviews.isEmpty) return 0.0;
     double total = 0.0;
@@ -791,68 +804,387 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
     return total / reviews.length;
   }
 
-  // Show report dialog
-  void _showReportDialog(BuildContext context) {
+  String _getCurrentUserId() {
+    final user = FirebaseAuth.instance.currentUser;
+    return user?.uid ?? '';
+  }
+
+  Future<String> _getCurrentUserName() async {
+    try {
+      final currentUserId = _getCurrentUserId();
+      if (currentUserId.isEmpty) return 'Anonymous User';
+
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUserId).get();
+      if (userDoc.exists) {
+        final userData = userDoc.data() as Map<String, dynamic>?;
+        final userName = userData?['name']?.toString().trim() ?? 'Anonymous User';
+        return userName.isNotEmpty ? userName : 'Anonymous User';
+      }
+      return 'Anonymous User';
+    } catch (e) {
+      return 'Anonymous User';
+    }
+  }
+
+  Future<bool> _hasUserAlreadyReported(String professionalId, String reporterId) async {
+    try {
+      if (professionalId.isEmpty || reporterId.isEmpty) return false;
+
+      final existingReports = await FirebaseFirestore.instance
+          .collection('reports')
+          .where('reportedProfessionalId', isEqualTo: professionalId)
+          .where('customerId', isEqualTo: reporterId)
+          .limit(1)
+          .get();
+
+      return existingReports.docs.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  void _showReportDialog(BuildContext context) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || currentUser.uid.isEmpty) {
+      _showLoginRequiredDialog(context);
+      return;
+    }
+
+    String reporterId = currentUser.uid;
+    if (reporterId == widget.userId) {
+      _showErrorDialog(context, 'You cannot report yourself.');
+      return;
+    }
+
+    try {
+      final hasAlreadyReported = await _hasUserAlreadyReported(widget.userId, reporterId);
+      if (hasAlreadyReported) {
+        _showAlreadyReportedDialog(context);
+        return;
+      }
+
+      String reporterName = await _getCurrentUserName();
+      final professionalDoc = await FirebaseFirestore.instance.collection('users').doc(widget.userId).get();
+
+      if (!professionalDoc.exists) {
+        _showErrorDialog(context, 'Professional profile not found.');
+        return;
+      }
+
+      final professionalData = professionalDoc.data() as Map<String, dynamic>?;
+      final professionalName = professionalData?['name']?.toString().trim() ?? 'Unknown Professional';
+      final currentReportCount = professionalData?['reportCount'] ?? 0;
+
+      _showReportReasonsDialog(context, reporterId, reporterName, professionalName, currentReportCount);
+    } catch (e) {
+      _showErrorDialog(context, 'Failed to load report dialog. Please try again.');
+    }
+  }
+
+  void _showLoginRequiredDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Report Professional'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+        title: Row(
           children: [
-            const Text('Why are you reporting this professional?'),
-            const SizedBox(height: 16),
-            ...['Inappropriate behavior', 'Fake profile', 'Poor service', 'Spam', 'Other'].map(
-                  (reason) => ListTile(
-                title: Text(reason),
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Report submitted successfully'),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                },
-              ),
-            ),
+            Icon(Icons.login, color: Colors.blue.shade600),
+            const SizedBox(width: 8),
+            const Text('Login Required'),
           ],
         ),
+        content: const Text('You need to be logged in to report a professional. Please log in and try again.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
         ],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
 
-  // Launch phone dialer
-  Future<void> _makePhoneCall(String phoneNumber) async {
-    final Uri launchUri = Uri(
-      scheme: 'tel',
-      path: phoneNumber,
+  void _showAlreadyReportedDialog(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.info, color: Colors.white),
+            SizedBox(width: 8),
+            Expanded(child: Text('You have already reported this professional.', style: TextStyle(color: Colors.white))),
+          ],
+        ),
+        backgroundColor: Colors.orange.shade600,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
     );
+  }
+
+  void _showErrorDialog(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
+          ],
+        ),
+        backgroundColor: Colors.red.shade600,
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  // ✅ FIXED: Report reasons dialog with proper layout and no pixel overflow
+  void _showReportReasonsDialog(BuildContext context, String reporterId, String reporterName, String professionalName, int currentReportCount) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.9,
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ✅ FIXED: Header with proper padding and no overflow
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.report, color: Colors.red.shade600, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Report Professional',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ✅ FIXED: Content with proper constraints and scrolling
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ✅ FIXED: Professional name with proper text wrapping
+                      SizedBox(
+                        width: double.infinity,
+                        child: Text(
+                          'Why are you reporting $professionalName?',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 16,
+                          ),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+
+                      // ✅ FIXED: Report count warning with proper layout
+                      if (currentReportCount > 0) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade200),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.warning, color: Colors.orange.shade600, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'This professional has $currentReportCount previous report${currentReportCount == 1 ? '' : 's'}',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.orange.shade800,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Select a reason:',
+                        style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // ✅ FIXED: Report reasons with proper layout
+                      ...['Inappropriate behavior', 'Fake profile', 'Poor service quality', 'Spam or fraud', 'Unprofessional conduct', 'Other'].map(
+                            (reason) => Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          width: double.infinity,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                await _submitReport(context, reporterId, reporterName, professionalName, reason);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.shade300),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.report_problem_outlined,
+                                      color: Colors.orange.shade600,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        reason,
+                                        style: const TextStyle(fontSize: 14),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // ✅ FIXED: Bottom actions with proper padding
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ✅ FIXED: Submit report with better loading dialog
+  Future<void> _submitReport(BuildContext context, String reporterId, String reporterName, String professionalName, String reason) async {
+    if (reporterId.isEmpty || reporterName.isEmpty || professionalName.isEmpty || reason.isEmpty) {
+      _showErrorDialog(context, 'Missing required information. Please try again.');
+      return;
+    }
+
+    // ✅ FIXED: Loading dialog with proper constraints
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 20),
+              const Text(
+                'Submitting Report...',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: Text(
+                  'Reporting $professionalName to admin',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      await ReportService.submitReport(
+        context: context,
+        reportedProfessionalId: widget.userId,
+        reportedProfessionalName: professionalName,
+        reportReason: reason,
+        customerId: reporterId,
+        customerName: reporterName,
+      );
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        _showErrorDialog(context, 'Failed to submit report. Please check your internet connection and try again.');
+      }
+    }
+  }
+
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
     await launchUrl(launchUri);
   }
 
-  // Launch WhatsApp
   Future<void> _launchWhatsApp(String phoneNumber) async {
     final Uri launchUri = Uri.parse('https://wa.me/$phoneNumber');
     await launchUrl(launchUri);
   }
 
-  // Launch email
-  Future<void> _sendEmail(String email) async {
-    final Uri launchUri = Uri(
-      scheme: 'mailto',
-      path: email,
-    );
-    await launchUrl(launchUri);
-  }
-
-  // Format service timestamp
   String _formatServiceTimestamp(dynamic timestamp) {
     try {
       if (timestamp is Timestamp) {
@@ -868,27 +1200,17 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
     }
   }
 
-  // Enhanced service image widget using ServiceImageCarousel
   Widget _buildServiceImage(int serviceIndex, Map<String, dynamic> service) {
-    // 🔧 FIXED: Changed from 'imageUrl' to 'imageUrls' to match Firestore field name
     final imageUrls = service['imageUrls'];
-
-    print('Service $serviceIndex imageUrls: $imageUrls'); // Debug print
-
     List<String> images = [];
 
-    // Handle different types of imageUrls field
     if (imageUrls is String && imageUrls.isNotEmpty) {
       images = [imageUrls];
     } else if (imageUrls is List) {
       images = imageUrls.cast<String>().where((url) => url.isNotEmpty).toList();
     }
 
-    // Use the ServiceImageCarousel widget
-    return ServiceImageCarousel(
-      imageUrls: images,
-      serviceId: service['serviceId'] ?? 'service_$serviceIndex',
-    );
+    return ServiceImageCarousel(imageUrls: images, serviceId: service['serviceId'] ?? 'service_$serviceIndex');
   }
 
   @override
@@ -898,10 +1220,7 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
     return Scaffold(
       backgroundColor: Colors.lightBlue.shade50,
       appBar: AppBar(
-        title: const Text(
-          'Professional Profile',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Professional Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.blue,
         elevation: 2,
         iconTheme: const IconThemeData(color: Colors.white),
@@ -917,11 +1236,7 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
         stream: FirebaseFirestore.instance.collection('users').doc(widget.userId).snapshots(),
         builder: (context, userSnapshot) {
           if (userSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-              ),
-            );
+            return const Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.blue)));
           }
           if (!userSnapshot.hasData || !userSnapshot.data!.exists) {
             return Center(
@@ -934,10 +1249,7 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                     children: [
                       Icon(Icons.person_off, size: 64, color: Colors.grey.shade400),
                       const SizedBox(height: 16),
-                      Text(
-                        'Professional profile not found.',
-                        style: theme.titleMedium?.copyWith(color: Colors.grey.shade600),
-                      ),
+                      Text('Professional profile not found.', style: theme.titleMedium?.copyWith(color: Colors.grey.shade600)),
                     ],
                   ),
                 ),
@@ -948,34 +1260,24 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
           final userData = userSnapshot.data!.data()! as Map<String, dynamic>;
 
           return StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('services')
-                .where('userId', isEqualTo: widget.userId)
-                .snapshots(),
+            stream: FirebaseFirestore.instance.collection('services').where('userId', isEqualTo: widget.userId).snapshots(),
             builder: (context, servicesSnapshot) {
               final services = servicesSnapshot.hasData ? servicesSnapshot.data!.docs : <QueryDocumentSnapshot>[];
 
               return StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(widget.userId)
-                    .collection('reviews')
-                    .snapshots(),
+                stream: FirebaseFirestore.instance.collection('users').doc(widget.userId).collection('reviews').snapshots(),
                 builder: (context, reviewsSnapshot) {
                   final reviews = reviewsSnapshot.hasData ? reviewsSnapshot.data!.docs : <QueryDocumentSnapshot>[];
-                  final averageRating = _calculateAverageRating(reviews);
 
                   return SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Profile Card with Badge and WhatsApp info
+                        // Profile Card with proper report count display
                         Card(
                           elevation: 6,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           child: Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(24),
@@ -984,10 +1286,7 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                               gradient: LinearGradient(
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
-                                colors: [
-                                  Colors.lightBlue.shade100,
-                                  Colors.white,
-                                ],
+                                colors: [Colors.lightBlue.shade100, Colors.white],
                               ),
                             ),
                             child: Column(
@@ -996,8 +1295,7 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                                   children: [
                                     GestureDetector(
                                       onTap: () {
-                                        if (userData['profileImage'] != null &&
-                                            userData['profileImage'].toString().isNotEmpty) {
+                                        if (userData['profileImage'] != null && userData['profileImage'].toString().isNotEmpty) {
                                           showDialog(
                                             context: context,
                                             builder: (_) => Dialog(
@@ -1006,9 +1304,7 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                                                 borderRadius: BorderRadius.circular(12),
                                                 child: PhotoView(
                                                   imageProvider: NetworkImage(userData['profileImage']),
-                                                  backgroundDecoration: const BoxDecoration(
-                                                      color: Colors.transparent
-                                                  ),
+                                                  backgroundDecoration: const BoxDecoration(color: Colors.transparent),
                                                 ),
                                               ),
                                             ),
@@ -1018,33 +1314,21 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                                       child: Container(
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          border: Border.all(
-                                            color: Colors.blue.shade300,
-                                            width: 3,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.blue.shade200,
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
+                                          border: Border.all(color: Colors.blue.shade300, width: 3),
+                                          boxShadow: [BoxShadow(color: Colors.blue.shade200, blurRadius: 10, offset: const Offset(0, 4))],
                                         ),
                                         child: CircleAvatar(
                                           radius: 50,
                                           backgroundColor: Colors.lightBlue.shade100,
-                                          backgroundImage: (userData['profileImage'] != null &&
-                                              userData['profileImage'].toString().isNotEmpty)
+                                          backgroundImage: (userData['profileImage'] != null && userData['profileImage'].toString().isNotEmpty)
                                               ? NetworkImage(userData['profileImage']) as ImageProvider
                                               : null,
-                                          child: (userData['profileImage'] == null ||
-                                              userData['profileImage'].toString().isEmpty)
+                                          child: (userData['profileImage'] == null || userData['profileImage'].toString().isEmpty)
                                               ? Icon(Icons.person, size: 50, color: Colors.blue.shade600)
                                               : null,
                                         ),
                                       ),
                                     ),
-                                    // Badge indicator
                                     if (userData['badgeStatus'] == 'assigned')
                                       Positioned(
                                         bottom: 5,
@@ -1055,19 +1339,9 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                                             color: Colors.blue,
                                             shape: BoxShape.circle,
                                             border: Border.all(color: Colors.white, width: 2),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.blue.shade300,
-                                                blurRadius: 4,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
+                                            boxShadow: [BoxShadow(color: Colors.blue.shade300, blurRadius: 4, offset: const Offset(0, 2))],
                                           ),
-                                          child: const Icon(
-                                            Icons.star,
-                                            color: Colors.white,
-                                            size: 16,
-                                          ),
+                                          child: const Icon(Icons.star, color: Colors.white, size: 16),
                                         ),
                                       ),
                                   ],
@@ -1075,31 +1349,20 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                                 const SizedBox(height: 20),
                                 Text(
                                   userData['name'] ?? 'Professional',
-                                  style: theme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue.shade800,
-                                  ),
+                                  style: theme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.blue.shade800),
                                   textAlign: TextAlign.center,
                                 ),
                                 const SizedBox(height: 12),
-
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.shade600,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
+                                  decoration: BoxDecoration(color: Colors.blue.shade600, borderRadius: BorderRadius.circular(20)),
                                   child: Text(
                                     userData['role'] ?? 'Professional',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                    ),
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                                   ),
                                 ),
 
-                                // WhatsApp info in profile card
+                                // WhatsApp info
                                 if (userData['whatsapp'] != null && userData['whatsapp'].toString().isNotEmpty) ...[
                                   const SizedBox(height: 16),
                                   Container(
@@ -1112,33 +1375,16 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                                     child: Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        Icon(
-                                          Icons.chat,
-                                          color: Colors.blue.shade600,
-                                          size: 20,
-                                        ),
+                                        Icon(Icons.chat, color: Colors.blue.shade600, size: 20),
                                         const SizedBox(width: 8),
-                                        Text(
-                                          userData['whatsapp'],
-                                          style: TextStyle(
-                                            color: Colors.blue.shade800,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
+                                        Text(userData['whatsapp'], style: TextStyle(color: Colors.blue.shade800, fontWeight: FontWeight.w600)),
                                         const SizedBox(width: 12),
                                         GestureDetector(
                                           onTap: () => _makePhoneCall(userData['whatsapp']),
                                           child: Container(
                                             padding: const EdgeInsets.all(6),
-                                            decoration: BoxDecoration(
-                                              color: Colors.blue.shade600,
-                                              borderRadius: BorderRadius.circular(6),
-                                            ),
-                                            child: const Icon(
-                                              Icons.call,
-                                              color: Colors.white,
-                                              size: 16,
-                                            ),
+                                            decoration: BoxDecoration(color: Colors.blue.shade600, borderRadius: BorderRadius.circular(6)),
+                                            child: const Icon(Icons.call, color: Colors.white, size: 16),
                                           ),
                                         ),
                                         const SizedBox(width: 8),
@@ -1146,15 +1392,8 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                                           onTap: () => _launchWhatsApp(userData['whatsapp']),
                                           child: Container(
                                             padding: const EdgeInsets.all(6),
-                                            decoration: BoxDecoration(
-                                              color: Colors.blue.shade600,
-                                              borderRadius: BorderRadius.circular(6),
-                                            ),
-                                            child: const Icon(
-                                              Icons.chat,
-                                              color: Colors.white,
-                                              size: 16,
-                                            ),
+                                            decoration: BoxDecoration(color: Colors.blue.shade600, borderRadius: BorderRadius.circular(6)),
+                                            child: const Icon(Icons.chat, color: Colors.white, size: 16),
                                           ),
                                         ),
                                       ],
@@ -1168,28 +1407,19 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
 
                         const SizedBox(height: 24),
 
-                        // Services Section with Enhanced ServiceImageCarousel
-                        if ((userData['role'] ?? '').toLowerCase() == 'professional') ...[
+                        // Services Section
+                        if ((userData['role'] ?? '') == 'Professional') ...[
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
                             decoration: BoxDecoration(
                               color: Colors.blue.shade600,
                               borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.blue.shade300,
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
+                              boxShadow: [BoxShadow(color: Colors.blue.shade300, blurRadius: 8, offset: const Offset(0, 2))],
                             ),
                             child: Text(
                               'Services Offered',
-                              style: theme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                              style: theme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Colors.white),
                               textAlign: TextAlign.center,
                             ),
                           ),
@@ -1198,27 +1428,15 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                           if (services.isEmpty)
                             Card(
                               elevation: 2,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               child: Container(
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(24),
                                 child: Column(
                                   children: [
-                                    Icon(
-                                      Icons.work_off,
-                                      size: 48,
-                                      color: Colors.grey.shade400,
-                                    ),
+                                    Icon(Icons.work_off, size: 48, color: Colors.grey.shade400),
                                     const SizedBox(height: 12),
-                                    Text(
-                                      'No services available at the moment.',
-                                      style: theme.bodyLarge?.copyWith(
-                                        color: Colors.grey.shade600,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
+                                    Text('No services available at the moment.', style: theme.bodyLarge?.copyWith(color: Colors.grey.shade600), textAlign: TextAlign.center),
                                   ],
                                 ),
                               ),
@@ -1232,9 +1450,7 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                               itemBuilder: (context, index) {
                                 final service = services[index].data() as Map<String, dynamic>;
                                 return Card(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                   elevation: 4,
                                   child: Container(
                                     decoration: BoxDecoration(
@@ -1242,10 +1458,7 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                                       gradient: LinearGradient(
                                         begin: Alignment.topLeft,
                                         end: Alignment.bottomRight,
-                                        colors: [
-                                          Colors.white,
-                                          Colors.lightBlue.shade50,
-                                        ],
+                                        colors: [Colors.white, Colors.lightBlue.shade50],
                                       ),
                                     ),
                                     child: Padding(
@@ -1255,42 +1468,23 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                                         children: [
                                           Row(
                                             children: [
-                                              // Use enhanced ServiceImageCarousel
                                               _buildServiceImage(index, service),
                                               const SizedBox(width: 12),
                                               Expanded(
                                                 child: Text(
                                                   service['service'] ?? 'Service',
-                                                  style: theme.titleMedium?.copyWith(
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Colors.blue.shade800,
-                                                  ),
+                                                  style: theme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.blue.shade800),
                                                 ),
                                               ),
                                             ],
                                           ),
                                           const SizedBox(height: 16),
-                                          _buildServiceDetail(
-                                            Icons.category,
-                                            'Category',
-                                            service['category'] ?? 'N/A',
-                                            theme,
-                                          ),
+                                          _buildServiceDetail(Icons.category, 'Category', service['category'] ?? 'N/A', theme),
                                           const SizedBox(height: 8),
-                                          _buildServiceDetail(
-                                            Icons.calendar_today,
-                                            'Added on',
-                                            _formatServiceTimestamp(service['timestamp'] ?? service['createdAt']),
-                                            theme,
-                                          ),
+                                          _buildServiceDetail(Icons.calendar_today, 'Added on', _formatServiceTimestamp(service['timestamp'] ?? service['createdAt']), theme),
                                           if (service['price'] != null) ...[
                                             const SizedBox(height: 8),
-                                            _buildServiceDetail(
-                                              Icons.attach_money,
-                                              'Price',
-                                              '₹${service['price']}',
-                                              theme,
-                                            ),
+                                            _buildServiceDetail(Icons.attach_money, 'Price', '₹${service['price']}', theme),
                                           ],
                                         ],
                                       ),
@@ -1302,75 +1496,39 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                           const SizedBox(height: 24),
                         ],
 
-                        // Reviews Section - USING ENHANCED REVIEW CAROUSEL WITH CUSTOMER PROFILE IMAGES
+                        // Reviews Section
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
                           decoration: BoxDecoration(
                             color: Colors.blue.shade600,
                             borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.shade300,
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
+                            boxShadow: [BoxShadow(color: Colors.blue.shade300, blurRadius: 8, offset: const Offset(0, 2))],
                           ),
-                          child: Text(
-                            'Customer Reviews',
-                            style: theme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
+                          child: Text('Customer Reviews', style: theme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Colors.white), textAlign: TextAlign.center),
                         ),
                         const SizedBox(height: 16),
-
-                        // ✅ Use the ENHANCED ReviewCarousel with CustomerProfileCarousel
                         ReviewCarousel(reviews: reviews),
-
                         const SizedBox(height: 24),
 
                         // Badge Status Section
                         if (userData['badgeStatus'] == 'assigned') ...[
                           Card(
                             elevation: 4,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             child: Container(
                               width: double.infinity,
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(16),
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Colors.blue.shade50,
-                                    Colors.white,
-                                  ],
-                                ),
+                                gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Colors.blue.shade50, Colors.white]),
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(
-                                    Icons.verified,
-                                    color: Colors.blue.shade600,
-                                    size: 24,
-                                  ),
+                                  Icon(Icons.verified, color: Colors.blue.shade600, size: 24),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    'Verified Professional',
-                                    style: TextStyle(
-                                      color: Colors.blue.shade700,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
+                                  Text('Verified Professional', style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.bold, fontSize: 16)),
                                 ],
                               ),
                             ),
@@ -1392,27 +1550,10 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(
-          icon,
-          size: 16,
-          color: Colors.blue.shade600,
-        ),
+        Icon(icon, size: 16, color: Colors.blue.shade600),
         const SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: theme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade700,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: theme.bodyMedium?.copyWith(
-              color: Colors.grey.shade800,
-            ),
-          ),
-        ),
+        Text('$label: ', style: theme.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+        Expanded(child: Text(value, style: theme.bodyMedium?.copyWith(color: Colors.grey.shade800))),
       ],
     );
   }

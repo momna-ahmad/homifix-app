@@ -54,6 +54,12 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showInterstitialAdAndNavigate(String uid, String? role) {
+    if (role == 'admin') {
+      // Don't show ad for admin, navigate directly
+      _navigateToRoleScreen(uid, role);
+      return;
+    }
+
     if (_isInterstitialAdReady && _interstitialAd != null) {
       _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
         onAdDismissedFullScreenContent: (InterstitialAd ad) {
@@ -73,6 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _navigateToRoleScreen(uid, role);
     }
   }
+
 
   void _navigateToRoleScreen(String uid, String? role) {
     if (role == null) {
