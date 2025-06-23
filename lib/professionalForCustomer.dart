@@ -1553,7 +1553,7 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
         Icon(icon, size: 16, color: Colors.blue.shade600),
         const SizedBox(width: 8),
         Text('$label: ', style: theme.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
-        Expanded(child: Text(value, style: theme.bodyMedium?.scopyWith(color: Colors.grey.shade800))),
+        Expanded(child: Text(value, style: theme.bodyMedium?.copyWith(color: Colors.grey.shade800))),
       ],
     );
   }
