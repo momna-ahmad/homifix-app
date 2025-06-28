@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'CustomerOrderPage.dart';
-import 'professionalOrderPage.dart';
-import 'addServicesPage.dart';
+import 'professional/professionalOrderPage.dart';
+import 'professional/addServicesPage.dart';
 import 'profilePage.dart';
 import 'landingPage.dart';
-import 'professionalSchedule.dart';
+import 'professional/professionalSchedule.dart';
 import 'customerHistory.dart';
-import 'professionalProfile.dart';
+import 'professional/professionalProfile.dart';
 import 'customerProfile.dart';
 import 'adminDashboard.dart';
 import 'users.dart';

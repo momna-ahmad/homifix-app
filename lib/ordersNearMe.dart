@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math';
 import 'dart:async';
-import 'sendServiceRequest.dart' ;
+import 'professional/sendServiceRequest.dart' ;
 
 
 class Place {

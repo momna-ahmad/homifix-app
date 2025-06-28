@@ -6,7 +6,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:async';
 import 'sendServiceRequest.dart' ; // Ensure this path is correct
-import 'ordersNearMe.dart';
+import '../ordersNearMe.dart';
 import 'package:geolocator/geolocator.dart'; // Add this import
 
 // Enum to represent the different job listing filters
@@ -358,20 +358,26 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
 
     try {
       // Wait for the dialog to return a result
-      final bool? result = await showDialog<bool>( // Specify the return type of showDialog
+      final bool? result = await showDialog<bool>(
         context: context,
         builder: (_) => SendRequestDialog(
           orderId: orderId,
           professionalId: widget.professionalId,
+          onRequestSent: () {
+            // This callback will be called when request is successfully sent
+            // Re-fetch the list of sent requests to update the UI
+            _requestsSentFuture = _fetchRequestsSent();
+
+            // Update the state to reflect the change
+            setState(() {
+              // The UI will rebuild and show 'Requested' button
+            });
+          },
         ),
       );
 
       // Only proceed with success actions if result is explicitly true
       if (result == true) {
-        // If the request was successful, re-fetch the list of sent requests
-        // This will cause the FutureBuilder to rebuild with updated data
-        _requestsSentFuture = _fetchRequestsSent();
-
         // Show a success snackbar ONLY if the request was sent
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -385,7 +391,7 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
         // If result is false or null (dialog dismissed/cancelled/failed within dialog),
         // we don't show a success snackbar, and the button remains 'Send Request'
         // unless there was an error in the process outside the dialog's control.
-        if (mounted && result == false) { // Optionally show a different snackbar for explicit failure
+        if (mounted && result == false) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Request sending failed or cancelled.'),
@@ -827,7 +833,8 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
             Align(
               alignment: Alignment.centerRight,
               child: ElevatedButton.icon(
-                onPressed: isLoading || hasRequested ? null : () => _showRequestDialog(orderId),
+                onPressed: isLoading || hasRequested ? null : () =>
+                    _showRequestDialog(orderId),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   shape: RoundedRectangleBorder(

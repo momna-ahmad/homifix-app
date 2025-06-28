@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'main.dart';
+import '../main.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -194,11 +194,13 @@ class RequestService {
 class SendRequestDialog extends StatefulWidget {
   final String orderId;
   final String professionalId;
+  final VoidCallback? onRequestSent; // Add callback
 
   const SendRequestDialog({
     super.key,
     required this.orderId,
     required this.professionalId,
+    this.onRequestSent, // Add callback parameter
   });
 
   @override
@@ -225,14 +227,21 @@ class _SendRequestDialogState extends State<SendRequestDialog> {
         message: message,
       );
 
-      // Close modal immediately after successful Firestore operations
+      // Call the callback to notify parent widget
+      if (widget.onRequestSent != null) {
+        widget.onRequestSent!();
+      }
+
+      // Close modal and return true to indicate success
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, true); // Return true for success
       }
     } catch (e) {
       // Only reset loading state if there was an error
       if (mounted) {
         setState(() => _loading = false);
+        // Optionally return false to indicate failure
+        // Navigator.pop(context, false);
       }
     }
   }
@@ -413,15 +422,19 @@ class _SendRequestDialogState extends State<SendRequestDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0EA5E9),
-                        borderRadius: BorderRadius.circular(12),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF22D3EE), Color(0xFF0EA5E9)],
+                        ),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF0EA5E9).withOpacity(0.3),
+                            color: Color(0x300EA5E9),
                             spreadRadius: 0,
                             blurRadius: 8,
-                            offset: const Offset(0, 2),
+                            offset: Offset(0, 2),
                           ),
                         ],
                       ),
