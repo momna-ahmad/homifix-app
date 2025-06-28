@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'warningDisplay.dart' ;
+import '../warningDisplay.dart' ;
 
 class ViewServicesPage extends StatelessWidget {
   final String userId;
@@ -343,9 +343,9 @@ class ViewServicesPage extends StatelessWidget {
 
   Widget _buildServiceCard(BuildContext context, Map<String, dynamic> data, DocumentSnapshot service, bool isProfessional) {
     final serviceName = data['service'] ?? 'House Cleaning';
-    // final category = data['category'] ?? 'Cleaning'; // Category is not used here directly
-    final price = data['price'] ?? '35';
-    final rating = data['rating'] ?? '4.8';
+    final category = data['category'] ?? 'N/A'; // Category is not used here directly
+    final price = data['price'] ?? 'N/A';
+    final unit = data['unit'] ?? 'N/A';
     final imageUrls = List<String>.from(data['imageUrls'] ?? []);
 
     return Container(
@@ -382,7 +382,7 @@ class ViewServicesPage extends StatelessWidget {
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
                     return const Icon(
-                      Icons.cleaning_services,
+                      Icons.home_repair_service_rounded,
                       color: Color(0xFF22D3EE),
                       size: 32,
                     );
@@ -390,7 +390,7 @@ class ViewServicesPage extends StatelessWidget {
                 ),
               )
                   : const Icon(
-                Icons.cleaning_services,
+                Icons.home_repair_service_rounded,
                 color: Color(0xFF22D3EE),
                 size: 32,
               ),
@@ -412,34 +412,21 @@ class ViewServicesPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'By ${data['providerName'] ?? 'Professional'}',
+                    'Category: $category',
                     style: const TextStyle(
                       fontSize: 12,
                       color: Color(0xFF64748B),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Row(
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
                     children: [
-                      const Icon(
-                        Icons.star,
-                        size: 16,
-                        color: Color(0xFFFBBF24),
-                      ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 8),
                       Text(
-                        rating,
+                        '\$$price per $unit ',
                         style: const TextStyle(
                           fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(
-                        '\$$price',
-                        style: const TextStyle(
-                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF22D3EE),
                         ),

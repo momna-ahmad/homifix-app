@@ -3,8 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'login.dart';
-import 'editProfile.dart' ;
+import '../login.dart';
+import '../editProfile.dart' ;
 
 Future<bool> sendBatchRequest(BuildContext context, String userId) async {
   try {

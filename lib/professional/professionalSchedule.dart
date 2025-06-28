@@ -4,7 +4,7 @@ import 'package:intl/intl.dart'; // Required for DateFormat
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
-import 'main.dart';
+import '../main.dart';
 import 'viewRoute.dart';
 
 //notification code
