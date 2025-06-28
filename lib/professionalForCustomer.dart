@@ -6,44 +6,57 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-// ✅ NOTIFICATION API CONFIGURATION
-const String notificationApiUrl = 'http://10.0.2.2:5000/send-notification';
+// ✅ Import the main.dart file to use existing notification setup
+import 'main.dart';
 
-// ✅ Push notification function
+// ✅ FIXED: Updated to use your correct IP address
+const String notificationApiUrl = 'http://192.168.43.84:5000/send-notification';
+
+// ✅ IMPROVED: Push notification function with better error handling
 Future<void> sendPushNotification({
-  required String targetFcmToken,
+  required String adminFcmToken,
   required String title,
   required String body,
 }) async {
+  print('🔄 Starting push notification process...');
+  print('📱 Admin FCM Token: ${adminFcmToken.substring(0, 20)}...');
+  print('📋 Title: $title');
+  print('📋 Body: $body');
+  print('🌐 API URL: $notificationApiUrl');
+
   try {
     final response = await http.post(
       Uri.parse(notificationApiUrl),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: jsonEncode({
-        'fcmToken': targetFcmToken,
+        'adminFcmToken': adminFcmToken,
         'title': title,
         'body': body,
       }),
-    );
+    ).timeout(const Duration(seconds: 15));
+
+    print('📤 Server Response Status: ${response.statusCode}');
+    print('📤 Server Response Body: ${response.body}');
 
     if (response.statusCode == 200) {
-      print('✅ Push notification sent successfully');
+      print('✅ Push notification sent successfully to admin');
     } else {
-      print('❌ Failed to send notification: ${response.body}');
+      print('❌ Failed to send notification to admin');
+      print('❌ Status: ${response.statusCode}');
+      print('❌ Response: ${response.body}');
     }
   } catch (e) {
-    print('🚨 Error sending notification: $e');
-  }
-}
+    print('🚨 DETAILED ERROR sending notification to admin:');
+    print('🚨 Error Type: ${e.runtimeType}');
+    print('🚨 Error Message: $e');
 
-// ✅ Local notification function
-Future<void> showLocalNotification(String title, String body) async {
-  try {
-    print('📱 Local Notification: $title - $body');
-  } catch (e) {
-    print('❌ Error showing local notification: $e');
+    if (e.toString().contains('Connection timed out')) {
+      print('⏰ SERVER TIMEOUT - Check if server is running at: $notificationApiUrl');
+      print('🔍 Try: curl -X POST $notificationApiUrl');
+    }
   }
 }
 
@@ -253,7 +266,7 @@ class _CustomerProfileCarouselState extends State<CustomerProfileCarousel> {
   }
 }
 
-// ✅ Service Image Carousel Widget
+// ✅ Service Image Carousel Widget (UNCHANGED)
 class ServiceImageCarousel extends StatefulWidget {
   final List<String> imageUrls;
   final String serviceId;
@@ -380,7 +393,7 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
   }
 }
 
-// ✅ Review Carousel with Customer Profile Integration
+// ✅ Review Carousel (UNCHANGED)
 class ReviewCarousel extends StatefulWidget {
   final List<QueryDocumentSnapshot> reviews;
 
@@ -559,7 +572,7 @@ class _ReviewCarouselState extends State<ReviewCarousel> {
   }
 }
 
-// ✅ Report Service with proper notification handling
+// ✅ CRASH-SAFE: Report Service with enhanced context safety
 class ReportService {
   static Future<void> submitReport({
     required BuildContext context,
@@ -569,28 +582,29 @@ class ReportService {
     required String customerId,
     required String customerName,
   }) async {
+    // ✅ SAFETY: Check context validity before proceeding
+    if (!context.mounted) {
+      print('⚠️ Context not mounted, aborting report submission');
+      return;
+    }
+
     if (reportedProfessionalId.isEmpty || customerId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
+      _safeShowSnackBar(context,
+          const Row(
             children: [
               Icon(Icons.warning, color: Colors.white),
               SizedBox(width: 12),
               Text('Invalid user information. Please try again.'),
             ],
           ),
-          backgroundColor: const Color(0xFFF59E0B),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.all(16),
-        ),
+          const Color(0xFFF59E0B)
       );
       return;
     }
 
     try {
       // 1. Create report document
-      final reportDoc = await FirebaseFirestore.instance.collection('reports').add({
+      await FirebaseFirestore.instance.collection('reports').add({
         'reportedProfessionalId': reportedProfessionalId,
         'reportedProfessionalName': reportedProfessionalName,
         'reportReason': reportReason,
@@ -615,175 +629,153 @@ class ReportService {
         }
       });
 
-      // 3. Show immediate success feedback
+      // 3. ✅ SAFETY: Check context again before showing success message
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
+        _safeShowSnackBar(context,
+            const Row(
               children: [
                 Icon(Icons.check_circle, color: Colors.white),
                 SizedBox(width: 12),
                 Text('Report submitted successfully'),
               ],
             ),
-            backgroundColor: const Color(0xFF10B981),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-          ),
+            const Color(0xFF10B981)
         );
       }
 
-      // 4. Handle notifications asynchronously
-      _handleNotificationsAsync(context, reportedProfessionalName, customerName, reportReason, reportDoc.id);
+      // 4. Handle notifications asynchronously (no context dependency)
+      unawaited(_handleNotificationsAsync(reportedProfessionalId, customerId, reportReason));
 
     } catch (e) {
+      print('Error submitting report: $e');
+
+      // ✅ SAFETY: Check context before showing error
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
+        _safeShowSnackBar(context,
+            Row(
               children: [
                 const Icon(Icons.error, color: Colors.white),
                 const SizedBox(width: 12),
                 Expanded(child: Text('Error submitting report: $e')),
               ],
             ),
-            backgroundColor: const Color(0xFFEF4444),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-          ),
+            const Color(0xFFEF4444)
         );
       }
       rethrow;
     }
   }
 
-  static void _handleNotificationsAsync(
-      BuildContext context,
-      String professionalName,
-      String customerName,
-      String reportReason,
-      String reportId,
-      ) async {
+  // ✅ CRASH-SAFE: Safe SnackBar helper
+  static void _safeShowSnackBar(BuildContext context, Widget content, Color backgroundColor) {
+    if (!context.mounted) return;
+
     try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: content,
+          backgroundColor: backgroundColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } catch (e) {
+      print('Error showing snackbar: $e');
+    }
+  }
+
+  // ✅ CRASH-SAFE: Async notification handling (no context dependency)
+  static Future<void> _handleNotificationsAsync(
+      String professionalId,
+      String customerId,
+      String reportReason
+      ) async {
+    print('🔄 Starting notification handling process...');
+
+    try {
+      // 1. Send local notification using existing function from main.dart
+      print('📱 Sending local notification to customer...');
       await showLocalNotification(
         'Report Submitted',
-        'Your report against $professionalName has been sent to the admin.',
+        'Your report has been submitted successfully. We will review it shortly.',
       );
+      print('✅ Local notification sent to customer');
 
-      final adminFcmToken = await _getAdminFcmToken();
-      bool notificationSent = false;
+      // 2. Get professional and customer names for notification context
+      print('📋 Fetching professional data...');
+      final professionalDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(professionalId)
+          .get();
+      final professionalData = professionalDoc.data() as Map<String, dynamic>?;
+      final professionalName = professionalData?['name'] ?? 'Unknown Professional';
+      print('👨‍💼 Professional Name: $professionalName');
 
-      if (adminFcmToken != null && adminFcmToken.isNotEmpty) {
+      print('📋 Fetching customer data...');
+      final customerDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(customerId)
+          .get();
+      final customerData = customerDoc.data() as Map<String, dynamic>?;
+      final customerName = customerData?['name'] ?? 'Unknown Customer';
+      print('👤 Customer Name: $customerName');
+
+      // 3. Get the admin's FCM token from users collection
+      print('🔍 Searching for admin user...');
+      final adminQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'Admin')
+          .limit(1)
+          .get();
+
+      print('📊 Admin query results: ${adminQuery.docs.length} admins found');
+
+      if (adminQuery.docs.isEmpty) {
+        print('⚠️ NO ADMIN FOUND IN THE SYSTEM');
+        return;
+      }
+
+      final adminData = adminQuery.docs.first.data();
+      final adminFcmToken = adminData['fcmToken'];
+
+      print('👨‍💼 Admin found: ${adminData['name']}');
+      print('📱 Admin FCM Token exists: ${adminFcmToken != null}');
+
+      if (adminFcmToken != null) {
+        print('📱 Admin FCM Token length: ${adminFcmToken.toString().length}');
+        print('📱 Admin FCM Token preview: ${adminFcmToken.toString().substring(0, 20)}...');
+      }
+
+      // 4. Send push notification to admin
+      if (adminFcmToken != null && adminFcmToken.toString().trim().isNotEmpty) {
+        print('🚀 Sending push notification to admin...');
         await sendPushNotification(
-          targetFcmToken: adminFcmToken,
-          title: "⚠️ New Professional Report",
+          adminFcmToken: adminFcmToken.toString().trim(),
+          title: "New Professional Report",
           body: "$customerName reported $professionalName for: $reportReason",
         );
-        notificationSent = true;
-      }
-
-      await _createAdminInAppNotification(
-        professionalName: professionalName,
-        customerName: customerName,
-        reportReason: reportReason,
-        reportId: reportId,
-      );
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.notifications_active, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    notificationSent
-                        ? 'Admin has been notified about your report'
-                        : 'Report saved. Admin will be notified shortly.',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.blue.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        print('✅ Push notification process completed');
+      } else {
+        print('❌ ADMIN FCM TOKEN IS NULL OR EMPTY');
+        print('🔍 Admin data: $adminData');
       }
 
     } catch (e) {
-      print('❌ Error in notification handling: $e');
-    }
-  }
-
-  static Future<void> _createAdminInAppNotification({
-    required String professionalName,
-    required String customerName,
-    required String reportReason,
-    required String reportId,
-  }) async {
-    try {
-      await FirebaseFirestore.instance.collection('admin_notifications').add({
-        'type': 'professional_report',
-        'title': 'Professional Reported',
-        'message': '$customerName reported $professionalName for: $reportReason',
-        'reportId': reportId,
-        'professionalName': professionalName,
-        'customerName': customerName,
-        'reportReason': reportReason,
-        'timestamp': FieldValue.serverTimestamp(),
-        'isRead': false,
-        'priority': 'high',
-      });
-    } catch (e) {
-      print('❌ Error creating in-app notification: $e');
-    }
-  }
-
-  static Future<String?> _getAdminFcmToken() async {
-    try {
-      final adminSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('role', isEqualTo: 'Admin')
-          .limit(1)
-          .get();
-
-      if (adminSnapshot.docs.isNotEmpty) {
-        final adminData = adminSnapshot.docs.first.data();
-        final fcmToken = adminData['fcmToken'];
-        if (fcmToken != null && fcmToken.toString().trim().isNotEmpty) {
-          return fcmToken.toString().trim();
-        }
-      }
-
-      final fallbackSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('role', isEqualTo: 'Admin')
-          .limit(1)
-          .get();
-
-      if (fallbackSnapshot.docs.isNotEmpty) {
-        final adminData = fallbackSnapshot.docs.first.data();
-        final fcmToken = adminData['fcmToken'];
-        if (fcmToken != null && fcmToken.toString().trim().isNotEmpty) {
-          return fcmToken.toString().trim();
-        }
-      }
-
-      return null;
-    } catch (e) {
-      print('❌ Error fetching admin FCM token: $e');
-      return null;
+      print('❌ DETAILED ERROR in notification handling:');
+      print('❌ Error Type: ${e.runtimeType}');
+      print('❌ Error Message: $e');
+      // Don't rethrow - this is background processing
     }
   }
 }
 
-// ✅ MAIN CLASS: ProfessionalForCustomer with UI FIXES
+// ✅ Helper function for fire-and-forget async operations
+void unawaited(Future<void> future) {
+  // Explicitly ignore the future to avoid unawaited_futures lint
+}
+
+// ✅ CRASH-SAFE: ProfessionalForCustomer with enhanced context safety
 class ProfessionalForCustomer extends StatefulWidget {
   final String userId;
   const ProfessionalForCustomer({super.key, required this.userId});
@@ -793,6 +785,8 @@ class ProfessionalForCustomer extends StatefulWidget {
 }
 
 class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
+  // ✅ CRASH-SAFE: Track loading dialog state
+  bool _isLoadingDialogShown = false;
 
   double _calculateAverageRating(List<dynamic> reviews) {
     if (reviews.isEmpty) return 0.0;
@@ -873,15 +867,20 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
 
       final professionalData = professionalDoc.data() as Map<String, dynamic>?;
       final professionalName = professionalData?['name']?.toString().trim() ?? 'Unknown Professional';
-      final currentReportCount = professionalData?['reportCount'] ?? 0;
 
-      _showReportReasonsDialog(context, reporterId, reporterName, professionalName, currentReportCount);
+      if (mounted) {
+        _showReportReasonsDialog(context, reporterId, reporterName, professionalName);
+      }
     } catch (e) {
-      _showErrorDialog(context, 'Failed to load report dialog. Please try again.');
+      if (mounted) {
+        _showErrorDialog(context, 'Failed to load report dialog. Please try again.');
+      }
     }
   }
 
   void _showLoginRequiredDialog(BuildContext context) {
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -902,43 +901,56 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
   }
 
   void _showAlreadyReportedDialog(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.info, color: Colors.white),
-            SizedBox(width: 8),
-            Expanded(child: Text('You have already reported this professional.', style: TextStyle(color: Colors.white))),
-          ],
+    if (!mounted) return;
+
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.info, color: Colors.white),
+              SizedBox(width: 8),
+              Expanded(child: Text('You have already reported this professional.', style: TextStyle(color: Colors.white))),
+            ],
+          ),
+          backgroundColor: Colors.orange.shade600,
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
-        backgroundColor: Colors.orange.shade600,
-        duration: const Duration(seconds: 3),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
+      );
+    } catch (e) {
+      print('Error showing already reported dialog: $e');
+    }
   }
 
   void _showErrorDialog(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
-          ],
+    if (!mounted) return;
+
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
+            ],
+          ),
+          backgroundColor: Colors.red.shade600,
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
-        backgroundColor: Colors.red.shade600,
-        duration: const Duration(seconds: 4),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
+      );
+    } catch (e) {
+      print('Error showing error dialog: $e');
+    }
   }
 
-  // ✅ FIXED: Report reasons dialog with proper layout and no pixel overflow
-  void _showReportReasonsDialog(BuildContext context, String reporterId, String reporterName, String professionalName, int currentReportCount) {
+  void _showReportReasonsDialog(BuildContext context, String reporterId, String reporterName, String professionalName) {
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -946,12 +958,11 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
         child: Container(
           constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.9,
-            maxHeight: MediaQuery.of(context).size.height * 0.8,
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ✅ FIXED: Header with proper padding and no overflow
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -979,14 +990,12 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                 ),
               ),
 
-              // ✅ FIXED: Content with proper constraints and scrolling
               Flexible(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ✅ FIXED: Professional name with proper text wrapping
                       SizedBox(
                         width: double.infinity,
                         child: Text(
@@ -1000,37 +1009,6 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                         ),
                       ),
 
-                      // ✅ FIXED: Report count warning with proper layout
-                      if (currentReportCount > 0) ...[
-                        const SizedBox(height: 16),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.orange.shade200),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(Icons.warning, color: Colors.orange.shade600, size: 20),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'This professional has $currentReportCount previous report${currentReportCount == 1 ? '' : 's'}',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.orange.shade800,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-
                       const SizedBox(height: 20),
                       const Text(
                         'Select a reason:',
@@ -1038,7 +1016,7 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                       ),
                       const SizedBox(height: 12),
 
-                      // ✅ FIXED: Report reasons with proper layout
+                      // Report reasons
                       ...['Inappropriate behavior', 'Fake profile', 'Poor service quality', 'Spam or fraud', 'Unprofessional conduct', 'Other'].map(
                             (reason) => Container(
                           margin: const EdgeInsets.only(bottom: 8),
@@ -1083,7 +1061,6 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                 ),
               ),
 
-              // ✅ FIXED: Bottom actions with proper padding
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -1109,52 +1086,62 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
     );
   }
 
-  // ✅ FIXED: Submit report with better loading dialog
+  // ✅ CRASH-SAFE: Enhanced submit report with better dialog management
   Future<void> _submitReport(BuildContext context, String reporterId, String reporterName, String professionalName, String reason) async {
+    if (!mounted) return;
+
     if (reporterId.isEmpty || reporterName.isEmpty || professionalName.isEmpty || reason.isEmpty) {
-      _showErrorDialog(context, 'Missing required information. Please try again.');
+      if (mounted) {
+        _showErrorDialog(context, 'Missing required information. Please try again.');
+      }
       return;
     }
 
-    // ✅ FIXED: Loading dialog with proper constraints
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.8,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 20),
-              const Text(
-                'Submitting Report...',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+    // ✅ CRASH-SAFE: Show loading dialog with proper state tracking
+    if (mounted && !_isLoadingDialogShown) {
+      _isLoadingDialogShown = true;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => WillPopScope(
+          onWillPop: () async => false, // Prevent back button
+          child: Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.8,
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: Text(
-                  'Reporting $professionalName to admin',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Submitting Report...',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      'Please wait while we process your report',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade600,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
-      ),
-    );
+      );
+    }
 
     try {
       await ReportService.submitReport(
@@ -1166,13 +1153,40 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
         customerName: reporterName,
       );
 
-      if (mounted) Navigator.pop(context);
+      // ✅ CRASH-SAFE: Close loading dialog safely
+      _safeCloseLoadingDialog();
+
     } catch (e) {
+      print('Error in _submitReport: $e');
+
+      // ✅ CRASH-SAFE: Close loading dialog safely
+      _safeCloseLoadingDialog();
+
       if (mounted) {
-        Navigator.pop(context);
         _showErrorDialog(context, 'Failed to submit report. Please check your internet connection and try again.');
       }
     }
+  }
+
+  // ✅ CRASH-SAFE: Safe dialog closing
+  void _safeCloseLoadingDialog() {
+    if (_isLoadingDialogShown && mounted) {
+      _isLoadingDialogShown = false;
+      try {
+        Navigator.of(context, rootNavigator: true).pop();
+      } catch (e) {
+        print('Error closing loading dialog: $e');
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    // ✅ CRASH-SAFE: Clean up any remaining dialogs
+    if (_isLoadingDialogShown) {
+      _isLoadingDialogShown = false;
+    }
+    super.dispose();
   }
 
   Future<void> _makePhoneCall(String phoneNumber) async {
@@ -1274,7 +1288,7 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Profile Card with proper report count display
+                        // Profile Card
                         Card(
                           elevation: 6,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

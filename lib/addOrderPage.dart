@@ -2,18 +2,14 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'customerOrderPage.dart';
-//import 'package:flutter_nominatim/flutter_nominatim.dart';
+import 'CustomerOrderPage.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/material.dart';
-//import 'package:flutter_nominatim/flutter_nominatim.dart' as nominatim;
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import '../shared/categories.dart'; // Import the new category structure
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
-
-
 
 class Place {
   final double latitude;
@@ -26,7 +22,6 @@ class Place {
     this.displayName,
   });
 }
-
 
 Future<List<Place>> _searchWithLocationIQ(String input) async {
   const apiKey = 'pk.c6205b1882bfb7c832c4fea13d2fc5b4';
@@ -46,8 +41,7 @@ Future<List<Place>> _searchWithLocationIQ(String input) async {
   }
 }
 
-
-Widget _buildColoredIconTextField(TextEditingController? controller, String label, IconData icon, Color iconColor, ValueChanged<String>? onChanged,  [TextInputType? type]) {
+Widget _buildColoredIconTextField(TextEditingController? controller, String label, IconData icon, Color iconColor, ValueChanged<String>? onChanged, [TextInputType? type]) {
   return TextField(
     controller: controller,
     keyboardType: type ?? TextInputType.text,
@@ -96,7 +90,6 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
   Timer? _debounce;
 
   // Called when user types
-
   void _onTextChanged(String input) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
 
@@ -144,8 +137,8 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
           _controller,
           'Location (e.g Wapda town, lahore, punjab, pakistan)',
           Icons.location_on,
-           Colors.redAccent.shade400,
-           _onTextChanged,
+          Colors.redAccent.shade400,
+          _onTextChanged,
         ),
         if (_suggestions.isNotEmpty)
           Container(
@@ -169,12 +162,9 @@ class _LocationAutocompleteFieldState extends State<LocationAutocompleteField> {
             ),
           ),
       ],
-
     );
   }
 }
-
-
 
 class AddOrderPage extends StatefulWidget {
   final String userId;
@@ -222,6 +212,7 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
   final _categoryController = TextEditingController();
   final _serviceController = TextEditingController();
   final _priceController = TextEditingController();
+  final _descriptionController = TextEditingController();
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   bool _isSubmitting = false;
@@ -253,6 +244,7 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
     _categoryController.dispose();
     _serviceController.dispose();
     _priceController.dispose();
+    _descriptionController.dispose();
     _animationController.dispose();
     super.dispose();
   }
@@ -264,6 +256,16 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
       initialDate: now,
       firstDate: now,
       lastDate: DateTime(now.year + 1),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.lightBlue.shade600,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) setState(() => _selectedDate = picked);
   }
@@ -272,55 +274,165 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.lightBlue.shade600,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
-  void _submitOrder() async {
-    if ( _selectedCategory == null ||
-        _selectedAddress.isEmpty ||
-        _priceController.text.trim().isEmpty ||
-        _selectedDate == null ||
-        _selectedTime == null) {
-
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
-      );
-      return;
+  // Validate form data
+  bool _validateForm() {
+    if (_selectedCategory == null) {
+      _showSnackBar('Please select a category', Colors.red);
+      return false;
     }
+
+    if (_selectedService == null || _selectedService!.isEmpty) {
+      _showSnackBar('Please select or enter a service', Colors.red);
+      return false;
+    }
+
+    if (_selectedAddress.isEmpty || _selectedLatLng == null) {
+      _showSnackBar('Please select a location', Colors.red);
+      return false;
+    }
+
+    if (_priceController.text.trim().isEmpty) {
+      _showSnackBar('Please enter your price offer', Colors.red);
+      return false;
+    }
+
+    final price = double.tryParse(_priceController.text.trim());
+    if (price == null || price <= 0) {
+      _showSnackBar('Please enter a valid price', Colors.red);
+      return false;
+    }
+
+    if (_selectedDate == null) {
+      _showSnackBar('Please select a service date', Colors.red);
+      return false;
+    }
+
+    if (_selectedTime == null) {
+      _showSnackBar('Please select a service time', Colors.red);
+      return false;
+    }
+
+    // Check if selected date is not in the past
+    final selectedDateTime = DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _selectedTime!.hour,
+      _selectedTime!.minute,
+    );
+
+    if (selectedDateTime.isBefore(DateTime.now())) {
+      _showSnackBar('Please select a future date and time', Colors.red);
+      return false;
+    }
+
+    return true;
+  }
+
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+      ),
+    );
+  }
+
+  void _submitOrder() async {
+    if (!_validateForm()) return;
 
     setState(() => _isSubmitting = true);
 
-    final formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate!);
-    final formattedTime = _selectedTime!.format(context);
+    try {
+      // Generate order ID
+      final orderRef = FirebaseFirestore.instance.collection('orders').doc();
+      final orderId = orderRef.id;
 
+      // Format date and time
+      final formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate!);
+      final formattedTime = _selectedTime!.format(context);
+      final formattedDateTime = DateFormat('yyyy-MM-dd HH:mm').format(
+        DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          _selectedTime!.hour,
+          _selectedTime!.minute,
+        ),
+      );
 
-    await FirebaseFirestore.instance.collection('orders').add({
-      'customerId': widget.userId,
-      'category': _selectedCategory,
-      'service': _selectedService,
-      'location': {
-        'lat': _selectedLatLng!.latitude,
-        'lng': _selectedLatLng!.longitude,
-        'address': _selectedAddress, // This is the place's display name
-      },
+      // Create order data with customer_post orderType
+      final orderData = {
+        'orderId': orderId,
+        'customerId': widget.userId,
+        'category': _selectedCategory!,
+        'service': _selectedService!,
+        'location': {
+          'lat': _selectedLatLng!.latitude,
+          'lng': _selectedLatLng!.longitude,
+          'address': _selectedAddress,
+        },
+        'priceOffer': _priceController.text.trim(),
+        'serviceDate': formattedDate,
+        'serviceTime': formattedTime,
+        'serviceDateTime': formattedDateTime,
+        'description': _descriptionController.text.trim(),
+        'applications': [], // Array for provider applications
+        'selectedWorkerId': null, // No worker selected initially
+        'status': 'waiting', // Waiting for provider applications
+        'orderType': 'customer_post', // ✅ Added orderType for customer job posts
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
 
-      'priceOffer': _priceController.text.trim(),
-      'serviceDate': formattedDate,
-      'serviceTime': formattedTime,
-      'applications': [],
-      'selectedWorkerId': null,
-      'status': 'waiting',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+      // Save order to Firestore
+      await orderRef.set(orderData);
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CustomerOrdersPage(userId: widget.userId),
-      ),
-    );
+      // Log success
+      print('✅ Customer job post created successfully!');
+      print('Order ID: $orderId');
+      print('Customer ID: ${widget.userId}');
+      print('Status: waiting');
+      print('Order Type: customer_post');
+      print('Order Data: $orderData');
+
+      // Show success message
+      if (mounted) {
+        _showSnackBar('Job post created successfully!', Colors.green);
+
+        // Navigate to customer orders page
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CustomerOrderPage(userId: widget.userId),
+          ),
+        );
+      }
+
+    } catch (e) {
+      print('❌ Error creating job post: $e');
+      if (mounted) {
+        _showSnackBar('Failed to create job post: $e', Colors.red);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   @override
@@ -337,9 +449,9 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
           child: FadeTransition(
             opacity: _fadeAnimation,
             child: DraggableScrollableSheet(
-              initialChildSize: 0.75,
-              minChildSize: 0.6,
-              maxChildSize: 0.9,
+              initialChildSize: 0.85,
+              minChildSize: 0.7,
+              maxChildSize: 0.95,
               builder: (_, controller) => Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                 decoration: BoxDecoration(
@@ -369,7 +481,7 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
                       ),
                     ),
                     Text(
-                      "Create New Order",
+                      "Create New Job Post",
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Colors.lightBlue.shade800,
@@ -378,10 +490,19 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
-                    _buildColoredIconTextField(_priceController, 'Your Price Offer', Icons.attach_money, Colors.amber.shade700, null , TextInputType.number),
+
+                    // Price Offer - Changed from Icons.attach_money to Icons.monetization_on
+                    _buildColoredIconTextField(
+                        _priceController,
+                        'Your Price Offer (Rs.)',
+                        Icons.monetization_on,
+                        Colors.amber.shade700,
+                        null,
+                        TextInputType.number
+                    ),
                     const SizedBox(height: 16),
 
-                    // ✅ Updated Category Dropdown
+                    // Category Dropdown
                     DropdownButtonFormField<String>(
                       value: _selectedCategory,
                       items: categories.map((category) {
@@ -406,7 +527,7 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
                     ),
                     const SizedBox(height: 16),
 
-                    // ✅ Updated Service Text Field with suggestions
+                    // Service Selection
                     if (_selectedCategory != null && subcategories[_selectedCategory!]!.isNotEmpty)
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -454,8 +575,7 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
                                   }
                                 },
                               ),
-                              prefixIcon:
-                              Icon(Icons.edit_note, color: Colors.orange.shade600),
+                              prefixIcon: Icon(Icons.edit_note, color: Colors.orange.shade600),
                               filled: true,
                               fillColor: Colors.lightBlue.shade50.withOpacity(0.6),
                             ),
@@ -469,6 +589,7 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
                       ),
                     const SizedBox(height: 16),
 
+                    // Location Selection
                     LocationAutocompleteField(
                       onPlaceSelected: (latLng, address) {
                         print("Selected location: $latLng, $address");
@@ -478,22 +599,86 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
                         });
                       },
                     ),
-                    // Other form fields
+                    const SizedBox(height: 16),
+
+                    // Description
+                    TextField(
+                      controller: _descriptionController,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        labelText: 'Job Description',
+                        hintText: 'Describe the job details, requirements, and expectations...',
+                        prefixIcon: Container(
+                          margin: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [Colors.teal.shade400.withOpacity(0.7), Colors.teal.shade400],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            boxShadow: [
+                              BoxShadow(color: Colors.teal.shade400.withOpacity(0.5), blurRadius: 5, offset: const Offset(1, 2)),
+                            ],
+                          ),
+                          child: Icon(Icons.description, color: Colors.white),
+                        ),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                        filled: true,
+                        fillColor: Colors.lightBlue.shade50.withOpacity(0.6),
+                        labelStyle: TextStyle(color: Colors.lightBlue.shade800, fontWeight: FontWeight.w600),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: Colors.lightBlue.shade700, width: 2),
+                        ),
+                        alignLabelWithHint: true,
+                      ),
+                    ),
                     const SizedBox(height: 20),
-                    _buildDateTimeTile('Service Date', _selectedDate == null ? 'No date chosen' : DateFormat('EEE, MMM d, yyyy').format(_selectedDate!), Icons.calendar_today, Colors.lightBlue.shade600, () => _pickDate(context)),
+
+                    // Date and Time Selection
+                    _buildDateTimeTile(
+                        'Service Date',
+                        _selectedDate == null
+                            ? 'No date chosen'
+                            : DateFormat('EEE, MMM d, yyyy').format(_selectedDate!),
+                        Icons.calendar_today,
+                        Colors.lightBlue.shade600,
+                            () => _pickDate(context)
+                    ),
                     const SizedBox(height: 10),
-                    _buildDateTimeTile('Service Time', _selectedTime == null ? 'No time chosen' : _selectedTime!.format(context), Icons.access_time, Colors.lightBlue.shade600, () => _pickTime(context)),
+                    _buildDateTimeTile(
+                        'Service Time',
+                        _selectedTime == null
+                            ? 'No time chosen'
+                            : _selectedTime!.format(context),
+                        Icons.access_time,
+                        Colors.lightBlue.shade600,
+                            () => _pickTime(context)
+                    ),
                     const SizedBox(height: 30),
+
+                    // Submit Button
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        icon: const Icon(Icons.check_circle_outline),
-                        label: _isSubmitting
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Text('Submit Request'),
+                        icon: _isSubmitting
+                            ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white
+                            )
+                        )
+                            : const Icon(Icons.check_circle_outline),
+                        label: Text(_isSubmitting
+                            ? 'Creating Job Post...'
+                            : 'Create Job Post'),
                         onPressed: _isSubmitting ? null : _submitOrder,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.lightBlue.shade700,
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 18),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -513,32 +698,40 @@ class OrderFormState extends State<OrderForm> with SingleTickerProviderStateMixi
   }
 
   Widget _buildDateTimeTile(String title, String subtitle, IconData icon, Color iconColor, VoidCallback onTap) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(
-            colors: [iconColor.withOpacity(0.7), iconColor],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(color: iconColor.withOpacity(0.4), blurRadius: 5, offset: const Offset(1, 2)),
-          ],
-        ),
-        child: Icon(icon, color: Colors.white, size: 22),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-      subtitle: Text(subtitle, style: TextStyle(color: Colors.grey.shade700, fontSize: 14)),
-      trailing: TextButton(
-        onPressed: onTap,
-        style: TextButton.styleFrom(
-          foregroundColor: iconColor,
-          textStyle: const TextStyle(fontWeight: FontWeight.bold),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              colors: [iconColor.withOpacity(0.7), iconColor],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            boxShadow: [
+              BoxShadow(color: iconColor.withOpacity(0.4), blurRadius: 5, offset: const Offset(1, 2)),
+            ],
+          ),
+          child: Icon(icon, color: Colors.white, size: 22),
         ),
-        child: const Text("Pick"),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        subtitle: Text(subtitle, style: TextStyle(color: Colors.grey.shade700, fontSize: 14)),
+        trailing: TextButton(
+          onPressed: onTap,
+          style: TextButton.styleFrom(
+            foregroundColor: iconColor,
+            textStyle: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          child: const Text("Pick"),
+        ),
       ),
     );
   }
