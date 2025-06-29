@@ -12,6 +12,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'homeNavPage.dart';
 import 'CustomerOrderPage.dart';
 import 'splashScreen.dart';
+import 'notification_service.dart'; // Import our notification service
 
 // Global plugin instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -25,9 +26,13 @@ const AndroidNotificationChannel channel = AndroidNotificationChannel(
 );
 
 // FCM Background handler
+@pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print('Handling a background message: ${message.messageId}');
+  print('📱 Handling a background message: ${message.messageId}');
+  print('📱 Background Title: ${message.notification?.title}');
+  print('📱 Background Body: ${message.notification?.body}');
+  print('📱 Background Data: ${message.data}');
 }
 
 // Daily Reminder (one-time, 2 minutes from now)
@@ -107,17 +112,23 @@ void main() async {
   } else {
     await Firebase.initializeApp();
 
-    // Initialize local notifications
+    // Register background handler BEFORE initializing notification service
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+    // Initialize our comprehensive notification service
+    await NotificationService.initialize();
+
+    // Initialize local notifications (keeping your existing setup)
     const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     final InitializationSettings initSettings = InitializationSettings(android: androidInit);
     await flutterLocalNotificationsPlugin.initialize(initSettings);
 
-    // Create notification channel
+    // Create notification channel (keeping your existing setup)
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
-    // Firebase Messaging setup
+    // Basic FCM setup (your existing code)
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     String? token = await messaging.getToken();
     print('📲 FCM Token: $token');
@@ -130,12 +141,9 @@ void main() async {
 
     NotificationSettings settings = await messaging.requestPermission();
     print('🔔 Notification permission: ${settings.authorizationStatus}');
-
-    // Register background handler
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }
 
-  // Schedule test reminder
+  // Schedule test reminder (keeping your existing functionality)
   await scheduleDailyReminder();
 
   runApp(const MyApp());
@@ -147,7 +155,6 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-
       title: 'Home Services App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

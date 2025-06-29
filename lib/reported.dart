@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:home_services_app/professionalForCustomer.dart';
 import 'professional_orders_page.dart';
+import 'reports_detail_page.dart';
 
 class ReportsPage extends StatefulWidget {
   final String userId;
@@ -13,26 +14,11 @@ class ReportsPage extends StatefulWidget {
 }
 
 class _ReportsPageState extends State<ReportsPage> {
-  String? _selectedWarning;
-
-  // Predefined warning messages
-  final List<String> _warningMessages = [
-    'Please maintain professional behavior with clients',
-    'Your service quality needs improvement',
-    'Multiple complaints received about delayed responses',
-    'Inappropriate communication reported',
-    'Service delivery standards not met',
-    'Please follow platform guidelines',
-    'Customer satisfaction scores are low',
-    'Unprofessional conduct reported',
-    'Service cancellation without proper notice',
-    'Pricing disputes with customers',
-  ];
-
+  // Updated stream to fetch users based on reportCount > 0
   Stream<QuerySnapshot> _reportedUsersStream() {
     return FirebaseFirestore.instance
         .collection('users')
-        .where('isReported', isEqualTo: true)
+        .where('reportCount', isGreaterThan: 0)
         .snapshots();
   }
 
@@ -116,6 +102,12 @@ class _ReportsPageState extends State<ReportsPage> {
       print('Error fetching order count: $e');
       return 0;
     }
+  }
+
+  // Get report count directly from user document data (no need for separate fetch)
+  int _getReportCount(Map<String, dynamic> userData) {
+    final reportCount = userData['reportCount'] as int?;
+    return reportCount ?? 0;
   }
 
   // Get warning count from user document
@@ -366,8 +358,15 @@ class _ReportsPageState extends State<ReportsPage> {
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  // Add navigation to reports page here
-                  // Navigator.push(context, MaterialPageRoute(builder: (_) => ReportsDetailPage(userId: userId)));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ReportsDetailPage(
+                        userId: userId,
+                        professionalName: name,
+                      ),
+                    ),
+                  );
                 },
               ),
 
@@ -377,180 +376,6 @@ class _ReportsPageState extends State<ReportsPage> {
         );
       },
     );
-  }
-
-  // Send warning dialog with predefined messages
-  void _showSendWarningDialog(String userId, String professionalName) {
-    _selectedWarning = null;
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Text(
-                'Send Warning to $professionalName',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A202C),
-                ),
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Select a warning message:',
-                      style: TextStyle(
-                        color: Color(0xFF4A5568),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      height: 300,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ListView.builder(
-                        itemCount: _warningMessages.length,
-                        itemBuilder: (context, index) {
-                          final message = _warningMessages[index];
-                          final isSelected = _selectedWarning == message;
-
-                          return ListTile(
-                            title: Text(
-                              message,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: isSelected ? const Color(0xFF22D3EE) : const Color(0xFF4A5568),
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                              ),
-                            ),
-                            leading: Radio<String>(
-                              value: message,
-                              groupValue: _selectedWarning,
-                              onChanged: (String? value) {
-                                setState(() {
-                                  _selectedWarning = value;
-                                });
-                              },
-                              activeColor: const Color(0xFF22D3EE),
-                            ),
-                            onTap: () {
-                              setState(() {
-                                _selectedWarning = message;
-                              });
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
-                      color: Color(0xFF718096),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD97706),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: _selectedWarning != null
-                      ? () => _sendWarning(userId, professionalName)
-                      : null,
-                  child: const Text(
-                    'Send Warning',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // Send warning function
-  void _sendWarning(String userId, String professionalName) async {
-    if (_selectedWarning == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please select a warning message'),
-          backgroundColor: const Color(0xFFDC2626),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      );
-      return;
-    }
-
-    try {
-      final warningData = {
-        'message': _selectedWarning!,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-        'sentBy': widget.userId,
-      };
-
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .update({
-        'warnings': FieldValue.arrayUnion([warningData]),
-      });
-
-      if (context.mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Warning sent to $professionalName'),
-            backgroundColor: const Color(0xFF059669),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error sending warning: $e'),
-            backgroundColor: const Color(0xFFDC2626),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        );
-      }
-    }
   }
 
   void _disableUser(String userId, BuildContext context) {
@@ -727,8 +552,8 @@ class _ReportsPageState extends State<ReportsPage> {
                     final badgeStatus = userData['badgeStatus']?.toString().toLowerCase();
                     final showStar = badgeStatus == 'assigned';
 
-                    final warningCount = _getWarningCount(userData);
                     final userId = user.id;
+                    final reportCount = _getReportCount(userData);
 
                     return FutureBuilder<List<dynamic>>(
                       future: Future.wait([
@@ -891,67 +716,42 @@ class _ReportsPageState extends State<ReportsPage> {
                                           ],
                                         ),
 
-                                        // Status Chips
+                                        // Status Chips - Shows report count
                                         const SizedBox(height: 8),
                                         Row(
                                           children: [
                                             if (isDisabled)
                                               _buildStatusChip('Disabled', const Color(0xFFDC2626))
                                             else
-                                              _buildStatusChip('Reported ($warningCount)', const Color(0xFFD97706)),
+                                              _buildStatusChip('Reports ($reportCount)', const Color(0xFFD97706)),
                                           ],
                                         ),
 
                                         const SizedBox(height: 16),
 
-                                        // Action Buttons (only Send Warning and Disable)
+                                        // Action Button (only Disable)
                                         if (!isDisabled) ...[
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: ElevatedButton(
-                                                  style: ElevatedButton.styleFrom(
-                                                    backgroundColor: const Color(0xFFD97706),
-                                                    foregroundColor: Colors.white,
-                                                    elevation: 0,
-                                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                                    shape: RoundedRectangleBorder(
-                                                      borderRadius: BorderRadius.circular(8),
-                                                    ),
-                                                  ),
-                                                  onPressed: () => _showSendWarningDialog(userId, name),
-                                                  child: const Text(
-                                                    'Send Warning',
-                                                    style: TextStyle(
-                                                      fontWeight: FontWeight.w600,
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFFDC2626),
+                                                foregroundColor: Colors.white,
+                                                elevation: 0,
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(8),
                                                 ),
                                               ),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: ElevatedButton(
-                                                  style: ElevatedButton.styleFrom(
-                                                    backgroundColor: const Color(0xFFDC2626),
-                                                    foregroundColor: Colors.white,
-                                                    elevation: 0,
-                                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                                    shape: RoundedRectangleBorder(
-                                                      borderRadius: BorderRadius.circular(8),
-                                                    ),
-                                                  ),
-                                                  onPressed: () => _disableUser(userId, context),
-                                                  child: const Text(
-                                                    'Disable',
-                                                    style: TextStyle(
-                                                      fontWeight: FontWeight.w600,
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
+                                              onPressed: () => _disableUser(userId, context),
+                                              child: const Text(
+                                                'Disable User',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 14,
                                                 ),
                                               ),
-                                            ],
+                                            ),
                                           ),
                                         ] else ...[
                                           Container(
