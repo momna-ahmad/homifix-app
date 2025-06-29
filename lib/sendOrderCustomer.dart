@@ -8,6 +8,7 @@ import 'HomeNavPage.dart'; // Import for navigation
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 
 class SendOrderCustomer extends StatefulWidget {
   final String customerId;
@@ -31,12 +32,11 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
     with SingleTickerProviderStateMixin {
   // Controllers and State Variables
   final _priceController = TextEditingController();
-  final _descriptionController =
-      TextEditingController(); // Changed from _notesController to _descriptionController
+  final _descriptionController = TextEditingController();
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   bool _isSubmitting = false;
-  bool _isGettingLocation = false; // Separate loading state for location
+  bool _isGettingLocation = false;
   String _currentLocation = '';
   double? _currentLat;
   double? _currentLng;
@@ -55,15 +55,20 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
   String? _category;
   String? _serviceName;
   String? _providerName;
-  String? _servicePrice; // Added service price variable
+  String? _servicePrice;
   Map<String, dynamic>? _serviceData;
+
+  // ✅ Real-time listeners
+  StreamSubscription<DocumentSnapshot>? _serviceSubscription;
+  StreamSubscription<DocumentSnapshot>? _providerSubscription;
+  StreamSubscription<QuerySnapshot>? _ordersSubscription;
 
   @override
   void initState() {
     super.initState();
     _initializeAnimations();
-    _loadServiceData();
-    _loadPreviousLocations(); // Load previous locations
+    _setupRealtimeServiceListener(); // ✅ Use onSnapshot for service data
+    _setupRealtimePreviousLocationsListener(); // ✅ Use onSnapshot for orders
 
     print('🔧 SendOrderCustomer initialized:');
     print('   👤 Customer ID: ${widget.customerId}');
@@ -90,94 +95,127 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
     _animationController.forward();
   }
 
-  // Load previous locations from orders collection
-  Future<void> _loadPreviousLocations() async {
-    setState(() => _isLoadingLocations = true);
+  // ✅ REAL-TIME: Setup service data listener using onSnapshot
+  void _setupRealtimeServiceListener() {
+    print('🔄 SETTING UP REAL-TIME SERVICE LISTENER');
 
-    try {
-      final ordersSnapshot =
-          await FirebaseFirestore.instance
-              .collection('orders')
-              .where('customerId', isEqualTo: widget.customerId)
-              .get();
+    _serviceSubscription = FirebaseFirestore.instance
+        .collection('services')
+        .doc(widget.serviceId)
+        .snapshots()
+        .listen(
+          (DocumentSnapshot serviceSnap) {
+        print('📡 REAL-TIME SERVICE UPDATE RECEIVED');
 
-      Set<String> uniqueAddresses = {};
-      List<Map<String, dynamic>> locations = [];
+        if (serviceSnap.exists) {
+          final data = serviceSnap.data() as Map<String, dynamic>;
 
-      for (var doc in ordersSnapshot.docs) {
-        final data = doc.data();
-        if (data['location'] != null &&
-            data['location'] is Map<String, dynamic>) {
-          final location = data['location'] as Map<String, dynamic>;
-          final address = location['address'] as String?;
+          // Setup provider listener
+          _setupRealtimeProviderListener();
 
-          if (address != null &&
-              address.isNotEmpty &&
-              !uniqueAddresses.contains(address)) {
-            uniqueAddresses.add(address);
-            locations.add({
-              'address': address,
-              'lat': location['lat'],
-              'lng': location['lng'],
+          if (mounted) {
+            setState(() {
+              _serviceData = data;
+              _category = data['category'];
+              _serviceName = data['service'];
+              _servicePrice = data['price']?.toString() ?? 'Not specified';
             });
           }
+
+          print('✅ REAL-TIME Service data updated:');
+          print('   📂 Category: $_category');
+          print('   🏷️ Service: $_serviceName');
+          print('   💰 Price: $_servicePrice');
+        } else {
+          _showErrorAndExit("Service not found");
         }
-      }
-
-      setState(() {
-        _previousLocations = locations;
-        _isLoadingLocations = false;
-      });
-
-      print('✅ Loaded ${locations.length} previous locations');
-    } catch (e) {
-      print('❌ Error loading previous locations: $e');
-      setState(() => _isLoadingLocations = false);
-    }
+      },
+      onError: (error) {
+        print('❌ REAL-TIME SERVICE ERROR: $error');
+        _showErrorAndExit("Error loading service data: $error");
+      },
+    );
   }
 
-  // Load service data from Firestore
-  Future<void> _loadServiceData() async {
-    try {
-      final serviceSnap =
-          await FirebaseFirestore.instance
-              .collection('services')
-              .doc(widget.serviceId)
-              .get();
+  // ✅ REAL-TIME: Setup provider data listener using onSnapshot
+  void _setupRealtimeProviderListener() {
+    print('🔄 SETTING UP REAL-TIME PROVIDER LISTENER');
 
-      if (serviceSnap.exists) {
-        final data = serviceSnap.data()!;
+    _providerSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.providerId)
+        .snapshots()
+        .listen(
+          (DocumentSnapshot providerSnap) {
+        print('📡 REAL-TIME PROVIDER UPDATE RECEIVED');
 
-        final providerSnap =
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(widget.providerId)
-                .get();
+        if (providerSnap.exists && mounted) {
+          final providerData = providerSnap.data() as Map<String, dynamic>;
+          setState(() {
+            _providerName = providerData['name'] ?? 'Unknown Provider';
+          });
 
-        setState(() {
-          _serviceData = data;
-          _category = data['category'];
-          _serviceName = data['service'];
-          _servicePrice =
-              data['price']?.toString() ??
-              'Not specified'; // Extract price from service data
-          _providerName =
-              providerSnap.exists
-                  ? (providerSnap.data()?['name'] ?? 'Unknown Provider')
-                  : 'Unknown Provider';
-        });
+          print('✅ REAL-TIME Provider data updated:');
+          print('   👨‍💼 Provider: $_providerName');
+        }
+      },
+      onError: (error) {
+        print('❌ REAL-TIME PROVIDER ERROR: $error');
+      },
+    );
+  }
 
-        print('✅ Service data loaded:');
-        print('   📂 Category: $_category');
-        print('   🏷️ Service: $_serviceName');
-        print('   💰 Price: $_servicePrice'); // Added price logging
-        print('   👨‍💼 Provider: $_providerName');
-      } else {
-        _showErrorAndExit("Service not found");
-      }
-    } catch (e) {
-      _showErrorAndExit("Error loading service data: $e");
-    }
+  // ✅ REAL-TIME: Load previous locations using onSnapshot
+  void _setupRealtimePreviousLocationsListener() {
+    setState(() => _isLoadingLocations = true);
+
+    print('🔄 SETTING UP REAL-TIME PREVIOUS LOCATIONS LISTENER');
+
+    _ordersSubscription = FirebaseFirestore.instance
+        .collection('orders')
+        .where('customerId', isEqualTo: widget.customerId)
+        .snapshots()
+        .listen(
+          (QuerySnapshot ordersSnapshot) {
+        print('📡 REAL-TIME ORDERS UPDATE RECEIVED');
+        print('📊 Orders count: ${ordersSnapshot.docs.length}');
+
+        Set<String> uniqueAddresses = {};
+        List<Map<String, dynamic>> locations = [];
+
+        for (var doc in ordersSnapshot.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          if (data['location'] != null && data['location'] is Map<String, dynamic>) {
+            final location = data['location'] as Map<String, dynamic>;
+            final address = location['address'] as String?;
+
+            if (address != null && address.isNotEmpty && !uniqueAddresses.contains(address)) {
+              uniqueAddresses.add(address);
+              locations.add({
+                'address': address,
+                'lat': location['lat'],
+                'lng': location['lng'],
+              });
+            }
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _previousLocations = locations;
+            _isLoadingLocations = false;
+          });
+        }
+
+        print('✅ REAL-TIME Previous locations updated: ${locations.length} locations');
+      },
+      onError: (error) {
+        print('❌ REAL-TIME ORDERS ERROR: $error');
+        if (mounted) {
+          setState(() => _isLoadingLocations = false);
+        }
+      },
+    );
   }
 
   void _showErrorAndExit(String message) {
@@ -282,7 +320,7 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Previous location selected!'),
-        backgroundColor: Colors.blue,
+        backgroundColor: Color(0xFF00BCD4),
       ),
     );
   }
@@ -315,9 +353,7 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
       return false;
     }
 
-    if (_currentLocation.isEmpty ||
-        _currentLat == null ||
-        _currentLng == null) {
+    if (_currentLocation.isEmpty || _currentLat == null || _currentLng == null) {
       _showSnackBar(
         'Please select a location or get your current location',
         Colors.red,
@@ -343,12 +379,12 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
   }
 
   void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: color),
+    );
   }
 
-  // ✅ Submit order to Firestore with description field
+  // ✅ Submit order and add to professional's orders array
   Future<void> _submitOrder() async {
     if (!_validateForm()) return;
 
@@ -373,7 +409,7 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
         ),
       );
 
-      // Create order data with description field
+      // Create order data
       final orderData = {
         'orderId': orderId,
         'customerId': customerId,
@@ -382,7 +418,7 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
         'selectedWorkerId': providerId,
         'category': _category!,
         'service': _serviceName!,
-        'price': _servicePrice!, // Use service price from Firestore
+        'price': _servicePrice!,
         'providerName': _providerName ?? 'Unknown Provider',
         'priceOffer': _priceController.text.trim(),
         'serviceDate': formattedDate,
@@ -393,22 +429,45 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
           'lng': _currentLng!,
           'address': _currentLocation,
         },
-        'description':
-            _descriptionController.text
-                .trim(), // Changed from 'notes' to 'description'
+        'description': _descriptionController.text.trim(),
         'status': 'assigned',
         'orderType': 'customer_application',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      // Save order to Firestore
-      await FirebaseFirestore.instance
-          .collection('orders')
-          .doc(orderId)
-          .set(orderData);
+      // ✅ Professional's order data for orders array
+      final professionalOrderData = {
+        'completionStatus': 'pending', // 1. completionStatus
+        'date': formattedDate, // 2. date
+        'location': [ // 3. location as array
+          _currentLocation, // address
+          _currentLat!, // lat
+          _currentLng!, // lng
+        ],
+        'orderId': orderId, // 4. orderId
+        'price': _priceController.text.trim(), // 5. price (customer's offer)
+        'service': _serviceName!, // 6. service
+        'time': formattedTime, // 7. time
+      };
 
-      print('✅ Order created successfully!');
+      // Use batch write for atomic operations
+      final batch = FirebaseFirestore.instance.batch();
+
+      // 1. Add order to orders collection
+      final orderRef = FirebaseFirestore.instance.collection('orders').doc(orderId);
+      batch.set(orderRef, orderData);
+
+      // 2. Add order to professional's orders array
+      final professionalRef = FirebaseFirestore.instance.collection('users').doc(providerId);
+      batch.update(professionalRef, {
+        'orders': FieldValue.arrayUnion([professionalOrderData])
+      });
+
+      // Execute batch
+      await batch.commit();
+
+      print('✅ Order created and added to professional successfully!');
       print('📋 Order Details:');
       print('   🆔 Order ID: $orderId');
       print('   👤 Customer ID: $customerId');
@@ -416,14 +475,21 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
       print('   🏷️ Service ID: $serviceId');
       print('   📊 Status: assigned');
       print('   📝 Order Type: customer_application');
-      print('   💰 Service Price: $_servicePrice'); // Updated log
+      print('   💰 Service Price: $_servicePrice');
       print('   💰 Price Offer: ${_priceController.text.trim()}');
       print('   📅 Service Date: $formattedDate');
       print('   ⏰ Service Time: $formattedTime');
       print('   📍 Location: $_currentLocation');
-      print(
-        '   📝 Description: ${_descriptionController.text.trim()}',
-      ); // Updated log message
+      print('   📝 Description: ${_descriptionController.text.trim()}');
+      print('');
+      print('✅ Professional Order Data Added:');
+      print('   📊 Completion Status: pending');
+      print('   📅 Date: $formattedDate');
+      print('   📍 Location Array: [$_currentLocation, $_currentLat, $_currentLng]');
+      print('   🆔 Order ID: $orderId');
+      print('   💰 Price: ${_priceController.text.trim()}');
+      print('   🏷️ Service: $_serviceName');
+      print('   ⏰ Time: $formattedTime');
 
       // Show success message
       if (mounted) {
@@ -433,9 +499,7 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder:
-                (_) =>
-                    HomeNavPage(userId: widget.customerId, role: widget.role),
+            builder: (_) => HomeNavPage(userId: widget.customerId, role: widget.role),
           ),
         );
       }
@@ -462,7 +526,7 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(primary: Colors.lightBlue.shade600),
+            colorScheme: const ColorScheme.light(primary: Color(0xFF00BCD4)),
           ),
           child: child!,
         );
@@ -481,7 +545,7 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(primary: Colors.lightBlue.shade600),
+            colorScheme: const ColorScheme.light(primary: Color(0xFF00BCD4)),
           ),
           child: child!,
         );
@@ -498,13 +562,13 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.lightBlue.shade50,
+        color: const Color(0xFFE3F2FD),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.lightBlue.shade200),
+        border: Border.all(color: const Color(0xFF00BCD4).withOpacity(0.3)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: Colors.lightBlue.shade600, size: 24),
+          Icon(icon, color: const Color(0xFF00BCD4), size: 24),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -532,14 +596,14 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
   }
 
   Widget _buildTextField(
-    TextEditingController controller,
-    String label,
-    IconData icon,
-    Color iconColor, {
-    TextInputType keyboardType = TextInputType.text,
-    String? prefix,
-    int maxLines = 1,
-  }) {
+      TextEditingController controller,
+      String label,
+      IconData icon,
+      Color iconColor, {
+        TextInputType keyboardType = TextInputType.text,
+        String? prefix,
+        int maxLines = 1,
+      }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
@@ -559,24 +623,24 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
           borderSide: BorderSide(color: iconColor, width: 2),
         ),
         filled: true,
-        fillColor: Colors.lightBlue.shade50.withOpacity(0.6),
+        fillColor: const Color(0xFFE3F2FD).withOpacity(0.6),
       ),
     );
   }
 
   Widget _buildDateTimeTile(
-    String title,
-    String subtitle,
-    IconData icon,
-    Color iconColor,
-    VoidCallback onTap,
-  ) {
+      String title,
+      String subtitle,
+      IconData icon,
+      Color iconColor,
+      VoidCallback onTap,
+      ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: const Color(0xFF00BCD4).withOpacity(0.3)),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
@@ -626,9 +690,9 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
         padding: const EdgeInsets.all(16),
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
-          color: Colors.blue.shade50,
+          color: const Color(0xFFE3F2FD),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.blue.shade200),
+          border: Border.all(color: const Color(0xFF00BCD4).withOpacity(0.3)),
         ),
         child: Row(
           children: [
@@ -637,13 +701,13 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
               height: 16,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Colors.blue.shade600,
+                color: const Color(0xFF00BCD4),
               ),
             ),
             const SizedBox(width: 12),
             Text(
               'Loading previous locations...',
-              style: TextStyle(color: Colors.blue.shade700),
+              style: TextStyle(color: const Color(0xFF00838F)),
             ),
           ],
         ),
@@ -679,7 +743,7 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.shade200),
+        border: Border.all(color: const Color(0xFF00BCD4).withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -688,13 +752,13 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Icon(Icons.history, color: Colors.blue.shade600, size: 20),
+                Icon(Icons.history, color: const Color(0xFF00BCD4), size: 20),
                 const SizedBox(width: 8),
                 Text(
                   'Select from Previous Locations',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade700,
+                    color: const Color(0xFF00838F),
                     fontSize: 16,
                   ),
                 ),
@@ -709,32 +773,31 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
                 hintText: 'Choose a previous location',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.blue.shade300),
+                  borderSide: BorderSide(color: const Color(0xFF00BCD4).withOpacity(0.3)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.blue.shade600, width: 2),
+                  borderSide: const BorderSide(color: Color(0xFF00BCD4), width: 2),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 8,
                 ),
               ),
-              items:
-                  _previousLocations.map((location) {
-                    return DropdownMenuItem<Map<String, dynamic>>(
-                      value: location,
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: Text(
-                          location['address'],
-                          style: const TextStyle(fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 2,
-                        ),
-                      ),
-                    );
-                  }).toList(),
+              items: _previousLocations.map((location) {
+                return DropdownMenuItem<Map<String, dynamic>>(
+                  value: location,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      location['address'],
+                      style: const TextStyle(fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
+                    ),
+                  ),
+                );
+              }).toList(),
               onChanged: (value) {
                 if (value != null) {
                   _selectPreviousLocation(value);
@@ -803,14 +866,14 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.blue.shade100,
+                      color: const Color(0xFFE3F2FD),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       'Previous Location',
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.blue.shade700,
+                        color: const Color(0xFF00838F),
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -827,9 +890,15 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
   @override
   void dispose() {
     _priceController.dispose();
-    _descriptionController
-        .dispose(); // Changed from _notesController to _descriptionController
+    _descriptionController.dispose();
     _animationController.dispose();
+
+    // ✅ Dispose real-time listeners
+    _serviceSubscription?.cancel();
+    _providerSubscription?.cancel();
+    _ordersSubscription?.cancel();
+
+    print('🔄 DISPOSING ALL REAL-TIME LISTENERS');
     super.dispose();
   }
 
@@ -839,14 +908,23 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
 
     // Show loading while service data is being loaded
     if (_category == null || _serviceName == null || _servicePrice == null) {
-      return const Scaffold(
+      return Scaffold(
+        backgroundColor: const Color(0xFFE3F2FD),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Loading service details...'),
+              CircularProgressIndicator(
+                color: const Color(0xFF00BCD4),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Loading service details...',
+                style: TextStyle(
+                  color: const Color(0xFF00838F),
+                  fontSize: 16,
+                ),
+              ),
             ],
           ),
         ),
@@ -872,241 +950,229 @@ class _SendOrderCustomerState extends State<SendOrderCustomer>
                 initialChildSize: 0.85,
                 minChildSize: 0.7,
                 maxChildSize: 0.95,
-                builder:
-                    (_, controller) => Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 20,
+                builder: (_, controller) => Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 20,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF00BCD4).withOpacity(0.3),
+                        blurRadius: 15,
+                        offset: const Offset(0, -5),
                       ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(24),
+                    ],
+                  ),
+                  child: ListView(
+                    controller: controller,
+                    physics: const BouncingScrollPhysics(),
+                    children: [
+                      // Handle bar
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00BCD4),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.lightBlue.shade200.withOpacity(0.5),
-                            blurRadius: 15,
-                            offset: const Offset(0, -5),
-                          ),
-                        ],
                       ),
-                      child: ListView(
-                        controller: controller,
-                        physics: const BouncingScrollPhysics(),
-                        children: [
-                          // Handle bar
-                          Center(
-                            child: Container(
-                              width: 40,
-                              height: 4,
-                              margin: const EdgeInsets.only(bottom: 16),
-                              decoration: BoxDecoration(
-                                color: Colors.lightBlue.shade300,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                          ),
 
-                          // Title
-                          Text(
-                            "Apply for Service",
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.lightBlue.shade800,
-                              letterSpacing: 1.2,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 24),
+                      // Title
+                      Text(
+                        "Apply for Service",
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF00838F),
+                          letterSpacing: 1.2,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
 
-                          // Service Information
-                          _buildInfoTile(
-                            "Category",
-                            _category!,
-                            Icons.category,
-                          ),
-                          _buildInfoTile(
-                            "Service",
-                            _serviceName!,
-                            Icons.home_repair_service,
-                          ),
-                          _buildInfoTile(
-                            "Service Price",
-                            "Rs. $_servicePrice",
-                            Icons.monetization_on,
-                          ), // Added service price display
-                          if (_providerName != null)
-                            _buildInfoTile(
-                              "Provider",
-                              _providerName!,
-                              Icons.person,
-                            ),
+                      // Service Information
+                      _buildInfoTile(
+                        "Category",
+                        _category!,
+                        Icons.category,
+                      ),
+                      _buildInfoTile(
+                        "Service",
+                        _serviceName!,
+                        Icons.home_repair_service,
+                      ),
+                      _buildInfoTile(
+                        "Service Price",
+                        "Rs. $_servicePrice",
+                        Icons.monetization_on,
+                      ),
+                      if (_providerName != null)
+                        _buildInfoTile(
+                          "Provider",
+                          _providerName!,
+                          Icons.person,
+                        ),
 
-                          const SizedBox(height: 20),
+                      const SizedBox(height: 20),
 
-                          // Price Offer
-                          _buildTextField(
-                            _priceController,
-                            'Your Price Offer',
-                            Icons.currency_rupee, // ← Updated icon (no dollar sign)
-                            Colors.amber.shade700,
-                            keyboardType: TextInputType.number,
-                            prefix: 'Rs. ',
-                          ),
-                          const SizedBox(height: 20),
+                      // Price Offer
+                      _buildTextField(
+                        _priceController,
+                        'Your Price Offer',
+                        Icons.currency_rupee,
+                        Colors.amber.shade700,
+                        keyboardType: TextInputType.number,
+                        prefix: 'Rs. ',
+                      ),
+                      const SizedBox(height: 20),
 
-                          // Description (Changed from Additional Notes)
-                          _buildTextField(
-                            _descriptionController,
-                            'Description',
-                            Icons
-                                .description, // Changed icon from Icons.note to Icons.description
-                            Colors.grey.shade600,
-                            maxLines: 3,
-                          ),
-                          const SizedBox(height: 20),
+                      // Description
+                      _buildTextField(
+                        _descriptionController,
+                        'Description',
+                        Icons.description,
+                        Colors.grey.shade600,
+                        maxLines: 3,
+                      ),
+                      const SizedBox(height: 20),
 
-                          // Date Selection
-                          _buildDateTimeTile(
-                            'Service Date',
-                            _selectedDate == null
-                                ? 'No date selected'
-                                : DateFormat(
-                                  'EEE, MMM d, yyyy',
-                                ).format(_selectedDate!),
-                            Icons.calendar_today,
-                            Colors.lightBlue.shade600,
+                      // Date Selection
+                      _buildDateTimeTile(
+                        'Service Date',
+                        _selectedDate == null
+                            ? 'No date selected'
+                            : DateFormat('EEE, MMM d, yyyy').format(_selectedDate!),
+                        Icons.calendar_today,
+                        const Color(0xFF00BCD4),
                             () => _pickDate(context),
-                          ),
+                      ),
 
-                          // Time Selection
-                          _buildDateTimeTile(
-                            'Service Time',
-                            _selectedTime == null
-                                ? 'No time selected'
-                                : _selectedTime!.format(context),
-                            Icons.access_time,
-                            Colors.lightBlue.shade600,
+                      // Time Selection
+                      _buildDateTimeTile(
+                        'Service Time',
+                        _selectedTime == null
+                            ? 'No time selected'
+                            : _selectedTime!.format(context),
+                        Icons.access_time,
+                        const Color(0xFF00BCD4),
                             () => _pickTime(context),
-                          ),
+                      ),
 
-                          // Previous Locations Dropdown
-                          _buildPreviousLocationsDropdown(),
+                      // Previous Locations Dropdown
+                      _buildPreviousLocationsDropdown(),
 
-                          // OR Divider
-                          if (_previousLocations.isNotEmpty) ...[
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Divider(color: Colors.grey.shade300),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  child: Text(
-                                    'OR',
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Divider(color: Colors.grey.shade300),
-                                ),
-                              ],
+                      // OR Divider
+                      if (_previousLocations.isNotEmpty) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Divider(color: Colors.grey.shade300),
                             ),
-                            const SizedBox(height: 16),
-                          ],
-
-                          // Location Display
-                          _buildLocationDisplay(),
-
-                          // Get Location Button
-                          ElevatedButton.icon(
-                            onPressed:
-                                (_isGettingLocation || _isSubmitting)
-                                    ? null
-                                    : _getCurrentLocation,
-                            icon:
-                                _isGettingLocation
-                                    ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                    : const Icon(Icons.my_location),
-                            label: Text(
-                              _isGettingLocation
-                                  ? 'Getting Location...'
-                                  : 'Get Current Location',
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green.shade600,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 30),
-
-                          // Submit Button
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              icon:
-                                  _isSubmitting
-                                      ? const SizedBox(
-                                        height: 20,
-                                        width: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                      : const Icon(Icons.send),
-                              label: Text(
-                                _isSubmitting
-                                    ? 'Submitting Order...'
-                                    : 'Submit Order',
-                              ),
-                              onPressed:
-                                  (_isSubmitting || _isGettingLocation)
-                                      ? null
-                                      : _submitOrder,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.lightBlue.shade700,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 18,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                textStyle: const TextStyle(
-                                  fontSize: 18,
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: Text(
+                                'OR',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
                                   fontWeight: FontWeight.bold,
                                 ),
-                                elevation: 10,
-                                shadowColor: Colors.lightBlue.shade300,
                               ),
                             ),
+                            Expanded(
+                              child: Divider(color: Colors.grey.shade300),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Location Display
+                      _buildLocationDisplay(),
+
+                      // Get Location Button
+                      ElevatedButton.icon(
+                        onPressed: (_isGettingLocation || _isSubmitting)
+                            ? null
+                            : _getCurrentLocation,
+                        icon: _isGettingLocation
+                            ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
                           ),
-                          const SizedBox(height: 20),
-                        ],
+                        )
+                            : const Icon(Icons.my_location),
+                        label: Text(
+                          _isGettingLocation
+                              ? 'Getting Location...'
+                              : 'Get Current Location',
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.shade600,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 30),
+
+                      // Submit Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          icon: _isSubmitting
+                              ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                              : const Icon(Icons.send),
+                          label: Text(
+                            _isSubmitting
+                                ? 'Submitting Order...'
+                                : 'Submit Order',
+                          ),
+                          onPressed: (_isSubmitting || _isGettingLocation)
+                              ? null
+                              : _submitOrder,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00BCD4),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            elevation: 10,
+                            shadowColor: const Color(0xFF00BCD4).withOpacity(0.5),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

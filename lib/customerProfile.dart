@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,31 +10,201 @@ import 'dart:convert';
 import 'dart:io';
 import 'login.dart';
 
-class CustomerProfile extends StatefulWidget {
+// ✅ RIVERPOD PROVIDERS
+
+// User Data Provider with real-time updates
+final userDataProvider = StreamProvider.family<DocumentSnapshot<Map<String, dynamic>>?, String>((ref, userId) {
+  print('🔄 RIVERPOD: Setting up user data stream for: $userId');
+
+  return FirebaseFirestore.instance
+      .collection('users')
+      .doc(userId)
+      .snapshots()
+      .map((snapshot) {
+    print('📡 RIVERPOD: User data update received');
+    return snapshot.exists ? snapshot : null;
+  });
+});
+final notificationsProvider = StreamProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return Stream.value([]);
+
+  return FirebaseFirestore.instance
+      .collection('orders')
+      .where('customerId', isEqualTo: user.uid)
+      .where('status', isEqualTo: 'cancelled')
+      .snapshots()
+      .map((snapshot) => snapshot.docs.map((doc) => {
+    'id': doc.id,
+    ...doc.data() as Map<String, dynamic>
+  }).toList());
+});
+
+// Profile Actions Provider
+final profileActionsProvider = Provider<ProfileActions>((ref) {
+  return ProfileActions(ref);
+});
+
+class ProfileActions {
+  final Ref ref;
+  ProfileActions(this.ref);
+
+  // Cloudinary configuration
+  static const String cloudinaryCloudName = 'dnpcloh3n';
+  static const String cloudinaryUploadPreset = 'flutter_unsigned';
+
+  // Upload image to Cloudinary
+  Future<String?> uploadImageToCloudinary(File imageFile, String userId) async {
+    try {
+      print('🔄 RIVERPOD: Starting Cloudinary upload...');
+      print('☁️ Cloud Name: $cloudinaryCloudName');
+      print('📤 Upload Preset: $cloudinaryUploadPreset');
+      print('📁 File path: ${imageFile.path}');
+
+      final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudinaryCloudName/image/upload');
+      final request = http.MultipartRequest('POST', url);
+
+      // Add required fields
+      request.fields['upload_preset'] = cloudinaryUploadPreset;
+      request.fields['folder'] = 'profile_images';
+      request.fields['public_id'] = 'profile_${userId}_${DateTime.now().millisecondsSinceEpoch}';
+
+      // Add the file
+      final multipartFile = await http.MultipartFile.fromPath(
+        'file',
+        imageFile.path,
+        filename: 'profile_$userId.jpg',
+      );
+      request.files.add(multipartFile);
+
+      print('📤 RIVERPOD: Sending request to Cloudinary...');
+      final response = await request.send();
+      print('📊 RIVERPOD: Response status code: ${response.statusCode}');
+
+      final responseData = await response.stream.toBytes();
+      final responseString = String.fromCharCodes(responseData);
+
+      if (response.statusCode == 200) {
+        final jsonMap = json.decode(responseString);
+        final secureUrl = jsonMap['secure_url'];
+        print('✅ RIVERPOD: Upload successful! URL: $secureUrl');
+        return secureUrl;
+      } else {
+        print('❌ RIVERPOD: Upload failed with status: ${response.statusCode}');
+        final errorData = json.decode(responseString);
+        throw Exception('Cloudinary upload failed: ${errorData['error']['message'] ?? 'Unknown error'}');
+      }
+    } catch (e) {
+      print('❌ RIVERPOD: Upload error: $e');
+      throw Exception('Error uploading image: $e');
+    }
+  }
+  Future<void> receiveApplications(String orderId) async {
+    try {
+      final orderRef = FirebaseFirestore.instance.collection('orders').doc(orderId);
+
+      // Get the current order data first
+      final orderSnapshot = await orderRef.get();
+      if (!orderSnapshot.exists) {
+        throw Exception('Order not found');
+      }
+
+      final orderData = orderSnapshot.data() as Map<String, dynamic>;
+      final selectedWorkerId = orderData['selectedWorkerId'] as String?;
+
+      // Get current applications array
+      List<String> currentApplications = [];
+      if (orderData['applications'] != null) {
+        currentApplications = List<String>.from(orderData['applications']);
+      }
+
+      // Remove only the selected worker (who cancelled) from applications array
+      if (selectedWorkerId != null && currentApplications.contains(selectedWorkerId)) {
+        currentApplications.remove(selectedWorkerId);
+      }
+
+      // Update the order status and reset selectedWorkerId, keep other applications
+      await orderRef.update({
+        'selectedWorkerId': null,
+        'status': 'pending',
+        'applications': currentApplications, // Keep other applications, remove only cancelled worker
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Remove this order from the cancelled worker's appliedOrders
+      if (selectedWorkerId != null) {
+        final workerRef = FirebaseFirestore.instance.collection('workers').doc(selectedWorkerId);
+        await workerRef.update({
+          'appliedOrders': FieldValue.arrayRemove([orderId])
+        });
+      }
+
+    } catch (e) {
+      throw Exception('Failed to receive applications: $e');
+    }
+  }
+
+  Future<void> markNotificationAsRead(String orderId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(orderId)
+          .update({
+        'notificationRead': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Failed to mark notification as read: $e');
+    }
+  }
+
+  // Update user profile
+  Future<void> updateUserProfile(String userId, Map<String, dynamic> updates) async {
+    try {
+      print('🔄 RIVERPOD: Updating user profile: $userId');
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .update(updates);
+      print('✅ RIVERPOD: Profile updated successfully');
+    } catch (e) {
+      print('❌ RIVERPOD: Error updating profile: $e');
+      rethrow;
+    }
+  }
+
+  // Logout user
+  Future<void> logoutUser() async {
+    try {
+      print('🔄 RIVERPOD: Logging out user...');
+      await FirebaseAuth.instance.signOut();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      print('✅ RIVERPOD: User logged out successfully');
+    } catch (e) {
+      print('❌ RIVERPOD: Error logging out: $e');
+      rethrow;
+    }
+  }
+}
+
+class CustomerProfile extends ConsumerStatefulWidget {
   final String userId;
   const CustomerProfile({super.key, required this.userId});
 
   @override
-  State<CustomerProfile> createState() => _CustomerProfileState();
+  ConsumerState<CustomerProfile> createState() => _CustomerProfileState();
 }
 
-class _CustomerProfileState extends State<CustomerProfile>
+class _CustomerProfileState extends ConsumerState<CustomerProfile>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
-  bool _isLoading = true;
-  Map<String, dynamic>? _userData;
-  String? _errorMessage;
-
-  // Cloudinary configuration - Updated with your actual values
-  static const String cloudinaryCloudName = 'dnpcloh3n'; // Your cloud name
-  static const String cloudinaryUploadPreset = 'flutter_unsigned'; // Your upload preset
 
   @override
   void initState() {
     super.initState();
     _initializeAnimations();
-    _loadUserData();
   }
 
   void _initializeAnimations() {
@@ -48,100 +219,11 @@ class _CustomerProfileState extends State<CustomerProfile>
       parent: _animationController,
       curve: Curves.easeInOut,
     ));
-  }
-
-  void _loadUserData() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .get();
-
-      if (mounted) {
-        setState(() {
-          if (doc.exists) {
-            _userData = doc.data() as Map<String, dynamic>;
-            _isLoading = false;
-            _animationController.forward();
-          } else {
-            _errorMessage = 'Customer profile not found';
-            _isLoading = false;
-          }
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Error loading profile: ${e.toString()}';
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  void _refreshProfile() {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-      _userData = null;
-    });
-    _animationController.reset();
-    _loadUserData();
-  }
-
-  // Enhanced Cloudinary image upload function with better error handling
-  Future<String?> _uploadImageToCloudinary(File imageFile) async {
-    try {
-      print('Starting Cloudinary upload...');
-      print('Cloud Name: $cloudinaryCloudName');
-      print('Upload Preset: $cloudinaryUploadPreset');
-      print('File path: ${imageFile.path}');
-
-      final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudinaryCloudName/image/upload');
-
-      final request = http.MultipartRequest('POST', url);
-
-      // Add required fields
-      request.fields['upload_preset'] = cloudinaryUploadPreset;
-      request.fields['folder'] = 'profile_images';
-      request.fields['public_id'] = 'profile_${widget.userId}_${DateTime.now().millisecondsSinceEpoch}';
-
-      // Add the file
-      final multipartFile = await http.MultipartFile.fromPath(
-        'file',
-        imageFile.path,
-        filename: 'profile_${widget.userId}.jpg',
-      );
-      request.files.add(multipartFile);
-
-      print('Sending request to Cloudinary...');
-      final response = await request.send();
-
-      print('Response status code: ${response.statusCode}');
-
-      final responseData = await response.stream.toBytes();
-      final responseString = String.fromCharCodes(responseData);
-
-      print('Response body: $responseString');
-
-      if (response.statusCode == 200) {
-        final jsonMap = json.decode(responseString);
-        final secureUrl = jsonMap['secure_url'];
-        print('Upload successful! URL: $secureUrl');
-        return secureUrl;
-      } else {
-        print('Upload failed with status: ${response.statusCode}');
-        final errorData = json.decode(responseString);
-        throw Exception('Cloudinary upload failed: ${errorData['error']['message'] ?? 'Unknown error'}');
-      }
-    } catch (e) {
-      print('Upload error: $e');
-      throw Exception('Error uploading image: $e');
-    }
+    _animationController.forward();
   }
 
   // Function to show image picker options
-  void _showImagePickerOptions() {
+  void _showImagePickerOptions(Map<String, dynamic> userData) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -161,7 +243,7 @@ class _CustomerProfileState extends State<CustomerProfile>
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: const Color(0xFF00BCD4), // ✅ Updated color
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -171,7 +253,7 @@ class _CustomerProfileState extends State<CustomerProfile>
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2D3436),
+                color: Color(0xFF00838F), // ✅ Updated color
               ),
             ),
             const SizedBox(height: 24),
@@ -203,6 +285,7 @@ class _CustomerProfileState extends State<CustomerProfile>
     );
   }
 
+
   Widget _buildImagePickerOption({
     required IconData icon,
     required String label,
@@ -213,10 +296,10 @@ class _CustomerProfileState extends State<CustomerProfile>
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFFE3F2FD),
+          color: const Color(0xFFE3F2FD), // ✅ Updated color
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: const Color(0xFFBBDEFB),
+            color: const Color(0xFF00BCD4).withOpacity(0.3), // ✅ Updated color
             width: 1,
           ),
         ),
@@ -225,7 +308,7 @@ class _CustomerProfileState extends State<CustomerProfile>
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF2196F3),
+                color: const Color(0xFF00BCD4), // ✅ Updated color
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(
@@ -240,7 +323,7 @@ class _CustomerProfileState extends State<CustomerProfile>
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF2D3436),
+                color: Color(0xFF00838F), // ✅ Updated color
               ),
             ),
           ],
@@ -249,7 +332,7 @@ class _CustomerProfileState extends State<CustomerProfile>
     );
   }
 
-  // Function to pick and upload image directly
+  // Function to pick and upload image using Riverpod
   void _pickAndUploadImage(ImageSource source) async {
     try {
       final ImagePicker picker = ImagePicker();
@@ -277,7 +360,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2196F3)),
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00BCD4)), // ✅ Updated color
                   ),
                   SizedBox(height: 16),
                   Text(
@@ -285,6 +368,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
+                      color: Color(0xFF00838F), // ✅ Updated color
                     ),
                   ),
                 ],
@@ -294,18 +378,19 @@ class _CustomerProfileState extends State<CustomerProfile>
         );
 
         try {
+          final profileActions = ref.read(profileActionsProvider);
+
           // Upload to Cloudinary
-          final imageUrl = await _uploadImageToCloudinary(File(image.path));
+          final imageUrl = await profileActions.uploadImageToCloudinary(
+            File(image.path),
+            widget.userId,
+          );
 
           if (imageUrl != null) {
-            // Update Firestore
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(widget.userId)
-                .update({'profileImage': imageUrl});
-
-            // Refresh profile data
-            _loadUserData();
+            // Update Firestore using Riverpod
+            await profileActions.updateUserProfile(widget.userId, {
+              'profileImage': imageUrl,
+            });
 
             // Close loading dialog
             if (mounted) Navigator.pop(context);
@@ -321,7 +406,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                       Text('Profile picture updated successfully!'),
                     ],
                   ),
-                  backgroundColor: const Color(0xFF00B894),
+                  backgroundColor: const Color(0xFF10B981),
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -339,7 +424,7 @@ class _CustomerProfileState extends State<CustomerProfile>
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Error uploading image: ${e.toString()}'),
-                backgroundColor: const Color(0xFFE17055),
+                backgroundColor: Colors.red.shade400,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -354,7 +439,7 @@ class _CustomerProfileState extends State<CustomerProfile>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error selecting image: ${e.toString()}'),
-            backgroundColor: const Color(0xFFE17055),
+            backgroundColor: Colors.red.shade400,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -365,10 +450,10 @@ class _CustomerProfileState extends State<CustomerProfile>
     }
   }
 
-  // MODIFIED: Simplified edit profile dialog without image upload
-  void _showEditProfileDialog() {
+  // Edit profile dialog using Riverpod
+  void _showEditProfileDialog(Map<String, dynamic> userData) {
     final TextEditingController nameController = TextEditingController(
-      text: _userData!['name'] ?? '',
+      text: userData['name'] ?? '',
     );
     bool isUpdating = false;
 
@@ -393,7 +478,7 @@ class _CustomerProfileState extends State<CustomerProfile>
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: const Color(0xFF00BCD4).withOpacity(0.1), // ✅ Updated shadow
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),
@@ -409,12 +494,12 @@ class _CustomerProfileState extends State<CustomerProfile>
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2196F3).withOpacity(0.1),
+                          color: const Color(0xFF00BCD4).withOpacity(0.1), // ✅ Updated color
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: const Icon(
                           Icons.edit,
-                          color: Color(0xFF2196F3),
+                          color: Color(0xFF00BCD4), // ✅ Updated color
                           size: 24,
                         ),
                       ),
@@ -425,7 +510,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF2D3436),
+                            color: Color(0xFF00838F), // ✅ Updated color
                           ),
                         ),
                       ),
@@ -446,12 +531,12 @@ class _CustomerProfileState extends State<CustomerProfile>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: const Color(0xFF2196F3).withOpacity(0.3),
+                        color: const Color(0xFF00BCD4).withOpacity(0.3), // ✅ Updated color
                         width: 3,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF2196F3).withOpacity(0.2),
+                          color: const Color(0xFF00BCD4).withOpacity(0.2), // ✅ Updated shadow
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -459,13 +544,13 @@ class _CustomerProfileState extends State<CustomerProfile>
                     ),
                     child: CircleAvatar(
                       radius: 60,
-                      backgroundColor: const Color(0xFFE3F2FD),
-                      backgroundImage: (_userData!['profileImage'] != null &&
-                          _userData!['profileImage'].toString().isNotEmpty)
-                          ? NetworkImage(_userData!['profileImage'])
+                      backgroundColor: const Color(0xFFE3F2FD), // ✅ Updated color
+                      backgroundImage: (userData['profileImage'] != null &&
+                          userData['profileImage'].toString().isNotEmpty)
+                          ? NetworkImage(userData['profileImage'])
                           : null,
-                      child: (_userData!['profileImage'] == null ||
-                          _userData!['profileImage'].toString().isEmpty)
+                      child: (userData['profileImage'] == null ||
+                          userData['profileImage'].toString().isEmpty)
                           ? const Icon(
                         Icons.person,
                         size: 60,
@@ -489,10 +574,10 @@ class _CustomerProfileState extends State<CustomerProfile>
                   // Name Field
                   Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE3F2FD),
+                      color: const Color(0xFFE3F2FD), // ✅ Updated color
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: const Color(0xFFBBDEFB),
+                        color: const Color(0xFF00BCD4).withOpacity(0.3), // ✅ Updated color
                         width: 1,
                       ),
                     ),
@@ -501,7 +586,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                       enabled: !isUpdating,
                       style: const TextStyle(
                         fontSize: 16,
-                        color: Color(0xFF2D3436),
+                        color: Color(0xFF00838F), // ✅ Updated color
                         fontWeight: FontWeight.w500,
                       ),
                       decoration: InputDecoration(
@@ -516,12 +601,12 @@ class _CustomerProfileState extends State<CustomerProfile>
                           margin: const EdgeInsets.all(12),
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF2196F3).withOpacity(0.1),
+                            color: const Color(0xFF00BCD4).withOpacity(0.1), // ✅ Updated color
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(
                             Icons.person_outline,
-                            color: Color(0xFF2196F3),
+                            color: Color(0xFF00BCD4), // ✅ Updated color
                             size: 20,
                           ),
                         ),
@@ -537,10 +622,10 @@ class _CustomerProfileState extends State<CustomerProfile>
                         child: Container(
                           height: 56,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE3F2FD),
+                            color: const Color(0xFFE3F2FD), // ✅ Updated color
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: const Color(0xFFBBDEFB),
+                              color: const Color(0xFF00BCD4).withOpacity(0.3), // ✅ Updated color
                               width: 1,
                             ),
                           ),
@@ -568,14 +653,14 @@ class _CustomerProfileState extends State<CustomerProfile>
                           height: 56,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF2196F3), Color(0xFF64B5F6)],
+                              colors: [Color(0xFF00BCD4), Color(0xFF00ACC1)], // ✅ Updated colors
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
                             ),
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF2196F3).withOpacity(0.3),
+                                color: const Color(0xFF00BCD4).withOpacity(0.3), // ✅ Updated shadow
                                 blurRadius: 12,
                                 offset: const Offset(0, 4),
                               ),
@@ -589,7 +674,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: const Text('Name cannot be empty'),
-                                    backgroundColor: const Color(0xFFE17055),
+                                    backgroundColor: Colors.red.shade400,
                                     behavior: SnackBarBehavior.floating,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
@@ -604,15 +689,10 @@ class _CustomerProfileState extends State<CustomerProfile>
                               });
 
                               try {
-                                // Only update the name, keep existing profile image
-                                await FirebaseFirestore.instance
-                                    .collection('users')
-                                    .doc(widget.userId)
-                                    .update({
+                                final profileActions = ref.read(profileActionsProvider);
+                                await profileActions.updateUserProfile(widget.userId, {
                                   'name': nameController.text.trim(),
                                 });
-
-                                _loadUserData();
 
                                 if (mounted) {
                                   Navigator.of(context).pop();
@@ -625,7 +705,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                                           Text('Profile updated successfully!'),
                                         ],
                                       ),
-                                      backgroundColor: const Color(0xFF00B894),
+                                      backgroundColor: const Color(0xFF10B981),
                                       behavior: SnackBarBehavior.floating,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(12),
@@ -642,7 +722,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text('Error updating profile: ${e.toString()}'),
-                                      backgroundColor: const Color(0xFFE17055),
+                                      backgroundColor: Colors.red.shade400,
                                       behavior: SnackBarBehavior.floating,
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(12),
@@ -709,7 +789,7 @@ class _CustomerProfileState extends State<CustomerProfile>
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: const Color(0xFF00BCD4).withOpacity(0.1), // ✅ Updated shadow
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -721,12 +801,12 @@ class _CustomerProfileState extends State<CustomerProfile>
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE17055).withOpacity(0.1),
+                  color: Colors.red.shade400.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.logout,
-                  color: Color(0xFFE17055),
+                  color: Colors.red.shade400,
                   size: 32,
                 ),
               ),
@@ -736,7 +816,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF2D3436),
+                  color: Color(0xFF00838F), // ✅ Updated color
                 ),
               ),
               const SizedBox(height: 12),
@@ -755,10 +835,10 @@ class _CustomerProfileState extends State<CustomerProfile>
                     child: Container(
                       height: 56,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE3F2FD),
+                        color: const Color(0xFFE3F2FD), // ✅ Updated color
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: const Color(0xFFBBDEFB),
+                          color: const Color(0xFF00BCD4).withOpacity(0.3), // ✅ Updated color
                           width: 1,
                         ),
                       ),
@@ -785,11 +865,11 @@ class _CustomerProfileState extends State<CustomerProfile>
                     child: Container(
                       height: 56,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE17055),
+                        color: Colors.red.shade400,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFE17055).withOpacity(0.3),
+                            color: Colors.red.shade400.withOpacity(0.3),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -823,9 +903,8 @@ class _CustomerProfileState extends State<CustomerProfile>
 
     if (shouldLogout == true) {
       try {
-        await FirebaseAuth.instance.signOut();
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.clear();
+        final profileActions = ref.read(profileActionsProvider);
+        await profileActions.logoutUser();
 
         if (mounted) {
           Navigator.pushAndRemoveUntil(
@@ -839,7 +918,7 @@ class _CustomerProfileState extends State<CustomerProfile>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Error logging out: ${e.toString()}'),
-              backgroundColor: const Color(0xFFE17055),
+              backgroundColor: Colors.red.shade400,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -898,11 +977,291 @@ class _CustomerProfileState extends State<CustomerProfile>
     _animationController.dispose();
     super.dispose();
   }
+  void _showNotifications() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Consumer(
+        builder: (context, ref, child) {
+          final notificationsAsync = ref.watch(notificationsProvider);
 
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.7,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+            ),
+            child: Column(
+              children: [
+                // Handle
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+
+                // Header
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Notifications',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: Icon(Icons.close, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Divider(height: 1),
+
+                // Content
+                Expanded(
+                  child: notificationsAsync.when(
+                    data: (notifications) {
+                      if (notifications.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.notifications_off_outlined,
+                                size: 64,
+                                color: Colors.grey[400],
+                              ),
+                              SizedBox(height: 16),
+                              Text(
+                                'No notifications',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: EdgeInsets.all(16),
+                        itemCount: notifications.length,
+                        itemBuilder: (context, index) {
+                          final notification = notifications[index];
+                          final orderId = notification['id'];
+                          final serviceName = notification['serviceName'] ?? 'Unknown Service';
+                          final workerName = notification['workerName'] ?? 'Unknown Worker';
+                          final cancelledAt = notification['cancelledAt'];
+
+                          return Container(
+                            margin: EdgeInsets.only(bottom: 12),
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.red[50],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.red[200]!),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.cancel_outlined,
+                                      color: Colors.red[600],
+                                      size: 24,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Order Cancelled',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.red[800],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                SizedBox(height: 8),
+
+                                Text(
+                                  'Service: $serviceName',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+
+                                Text(
+                                  'Worker: $workerName',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+
+                                if (cancelledAt != null)
+                                  Text(
+                                    'Cancelled: ${_formatDate(cancelledAt)}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+
+                                SizedBox(height: 12),
+
+                                // Action Buttons
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: () {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Order cancellation confirmed'),
+                                              backgroundColor: Colors.red[600],
+                                            ),
+                                          );
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red[600],
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'Cancel Order',
+                                          style: TextStyle(fontSize: 13),
+                                        ),
+                                      ),
+                                    ),
+
+                                    SizedBox(width: 8),
+
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: () async {
+                                          try {
+                                            await ref.read(profileActionsProvider)
+                                                .receiveApplications(orderId);
+
+                                            Navigator.pop(context);
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Order restored to pending status'),
+                                                backgroundColor: Colors.green[600],
+                                              ),
+                                            );
+                                          } catch (e) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text('Failed to restore order'),
+                                                backgroundColor: Colors.red[600],
+                                              ),
+                                            );
+                                          }
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.blue[600],
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'Receive Applications',
+                                          style: TextStyle(fontSize: 13),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                    loading: () => Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.blue[600],
+                      ),
+                    ),
+                    error: (error, stack) => Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 64,
+                            color: Colors.red[400],
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Failed to load notifications',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.red[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+// Helper method for date formatting (add this too)
+  String _formatDate(dynamic timestamp) {
+    if (timestamp == null) return 'Unknown';
+
+    DateTime date;
+    if (timestamp is Timestamp) {
+      date = timestamp.toDate();
+    } else if (timestamp is DateTime) {
+      date = timestamp;
+    } else {
+      return 'Unknown';
+    }
+
+    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
   @override
   Widget build(BuildContext context) {
+    final userDataAsync = ref.watch(userDataProvider(widget.userId));
+
     return Scaffold(
-      backgroundColor: const Color(0xFFE3F2FD),
+      backgroundColor: const Color(0xFFE3F2FD), // ✅ Updated background color
       appBar: AppBar(
         title: const Text(
           'Customer Profile',
@@ -912,22 +1271,95 @@ class _CustomerProfileState extends State<CustomerProfile>
             fontSize: 20,
           ),
         ),
-        backgroundColor: const Color(0xFF2196F3),
+        backgroundColor: const Color(0xFF00BCD4),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          // 🔔 NEW NOTIFICATION BELL ICON
           Container(
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: IconButton(
-              onPressed: _userData != null ? _showEditProfileDialog : null,
-              icon: const Icon(Icons.edit, size: 20),
-              tooltip: 'Edit Profile',
+            child: Consumer(
+              builder: (context, ref, child) {
+                final notificationsAsync = ref.watch(notificationsProvider);
+
+                return Stack(
+                  children: [
+                    IconButton(
+                      onPressed: () => _showNotifications(),
+                      icon: const Icon(Icons.notifications_outlined, size: 20),
+                      tooltip: 'Notifications',
+                    ),
+                    // Notification badge
+                    notificationsAsync.when(
+                      data: (notificationsSnapshot) {
+                        final count = notificationsSnapshot?.length ?? 0;
+                        if (count == 0) return const SizedBox.shrink();
+
+                        return Positioned(
+                          right: 6,
+                          top: 6,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade400,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              count > 99 ? '99+' : count.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      },
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, __) => const SizedBox.shrink(),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
+
+          // Existing edit button
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: userDataAsync.when(
+              data: (userSnapshot) => IconButton(
+                onPressed: userSnapshot != null
+                    ? () => _showEditProfileDialog(userSnapshot.data()!)
+                    : null,
+                icon: const Icon(Icons.edit, size: 20),
+                tooltip: 'Edit Profile',
+              ),
+              loading: () => const IconButton(
+                onPressed: null,
+                icon: Icon(Icons.edit, size: 20),
+              ),
+              error: (_, __) => const IconButton(
+                onPressed: null,
+                icon: Icon(Icons.edit, size: 20),
+              ),
+            ),
+          ),
+
+          // Existing logout button
           Container(
             margin: const EdgeInsets.only(right: 16),
             decoration: BoxDecoration(
@@ -942,34 +1374,114 @@ class _CustomerProfileState extends State<CustomerProfile>
           ),
         ],
       ),
-      body: _buildBody(),
+      body: userDataAsync.when(
+        data: (userSnapshot) => _buildBody(userSnapshot),
+        loading: () => _buildLoadingWidget(),
+        error: (error, stack) {
+          print('❌ RIVERPOD: User data error: $error');
+          return _buildErrorWidget(error.toString());
+        },
+      ),
     );
   }
 
-  Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2196F3)),
-              strokeWidth: 3,
+  Widget _buildLoadingWidget() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00BCD4)), // ✅ Updated color
+            strokeWidth: 3,
+          ),
+          SizedBox(height: 24),
+          Text(
+            'Loading customer profile...',
+            style: TextStyle(
+              color: Color(0xFF636E72),
+              fontSize: 16,
             ),
-            SizedBox(height: 24),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorWidget(String error) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF00BCD4).withOpacity(0.05), // ✅ Updated shadow
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.red.shade400.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.error_outline,
+                size: 48,
+                color: Colors.red.shade400,
+              ),
+            ),
+            const SizedBox(height: 24),
             Text(
-              'Loading customer profile...',
-              style: TextStyle(
-                color: Color(0xFF636E72),
-                fontSize: 16,
+              error,
+              style: const TextStyle(
+                fontSize: 18,
+                color: Color(0xFF00838F), // ✅ Updated color
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  // Trigger rebuild by invalidating provider
+                  ref.invalidate(userDataProvider(widget.userId));
+                },
+                icon: const Icon(Icons.refresh, color: Colors.white),
+                label: const Text(
+                  'Try Again',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00BCD4), // ✅ Updated color
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
               ),
             ),
           ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
-    if (_errorMessage != null) {
+  Widget _buildBody(DocumentSnapshot<Map<String, dynamic>>? userSnapshot) {
+    if (userSnapshot == null || !userSnapshot.exists) {
       return Center(
         child: Container(
           margin: const EdgeInsets.all(24),
@@ -979,77 +1491,7 @@ class _CustomerProfileState extends State<CustomerProfile>
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE17055).withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.error_outline,
-                  size: 48,
-                  color: Color(0xFFE17055),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                _errorMessage!,
-                style: const TextStyle(
-                  fontSize: 18,
-                  color: Color(0xFF2D3436),
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton.icon(
-                  onPressed: _refreshProfile,
-                  icon: const Icon(Icons.refresh, color: Colors.white),
-                  label: const Text(
-                    'Try Again',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2196F3),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_userData == null) {
-      return Center(
-        child: Container(
-          margin: const EdgeInsets.all(24),
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: const Color(0xFF00BCD4).withOpacity(0.05), // ✅ Updated shadow
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -1075,7 +1517,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                 'Customer profile not found',
                 style: TextStyle(
                   fontSize: 18,
-                  color: Color(0xFF2D3436),
+                  color: Color(0xFF00838F), // ✅ Updated color
                   fontWeight: FontWeight.w600,
                 ),
                 textAlign: TextAlign.center,
@@ -1086,11 +1528,15 @@ class _CustomerProfileState extends State<CustomerProfile>
       );
     }
 
+    final userData = userSnapshot.data()!;
+
     return FadeTransition(
       opacity: _fadeAnimation,
       child: RefreshIndicator(
-        onRefresh: () async => _refreshProfile(),
-        color: const Color(0xFF2196F3),
+        onRefresh: () async {
+          ref.invalidate(userDataProvider(widget.userId));
+        },
+        color: const Color(0xFF00BCD4), // ✅ Updated color
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
@@ -1101,8 +1547,8 @@ class _CustomerProfileState extends State<CustomerProfile>
                 ),
                 child: Column(
                   children: [
-                    _buildHeaderSection(),
-                    _buildDetailsSection(),
+                    _buildHeaderSection(userData),
+                    _buildDetailsSection(userData),
                   ],
                 ),
               ),
@@ -1113,7 +1559,7 @@ class _CustomerProfileState extends State<CustomerProfile>
     );
   }
 
-  Widget _buildHeaderSection() {
+  Widget _buildHeaderSection(Map<String, dynamic> userData) {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -1121,8 +1567,8 @@ class _CustomerProfileState extends State<CustomerProfile>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFF2196F3),
-            Color(0xFF64B5F6),
+            Color(0xFF00BCD4), // ✅ Updated colors
+            Color(0xFF00ACC1),
           ],
         ),
         borderRadius: BorderRadius.only(
@@ -1139,11 +1585,11 @@ class _CustomerProfileState extends State<CustomerProfile>
               // Profile Image with Upload Option
               GestureDetector(
                 onTap: () {
-                  if (_userData!['profileImage'] != null &&
-                      _userData!['profileImage'].toString().isNotEmpty) {
-                    _showImageViewer(_userData!['profileImage']);
+                  if (userData['profileImage'] != null &&
+                      userData['profileImage'].toString().isNotEmpty) {
+                    _showImageViewer(userData['profileImage']);
                   } else {
-                    _showImagePickerOptions();
+                    _showImagePickerOptions(userData);
                   }
                 },
                 child: Hero(
@@ -1168,13 +1614,13 @@ class _CustomerProfileState extends State<CustomerProfile>
                         child: CircleAvatar(
                           radius: 64,
                           backgroundColor: Colors.white,
-                          backgroundImage: (_userData!['profileImage'] != null &&
-                              _userData!['profileImage'].toString().isNotEmpty)
-                              ? NetworkImage(_userData!['profileImage'])
+                          backgroundImage: (userData['profileImage'] != null &&
+                              userData['profileImage'].toString().isNotEmpty)
+                              ? NetworkImage(userData['profileImage'])
                           as ImageProvider
                               : null,
-                          child: (_userData!['profileImage'] == null ||
-                              _userData!['profileImage'].toString().isEmpty)
+                          child: (userData['profileImage'] == null ||
+                              userData['profileImage'].toString().isEmpty)
                               ? Icon(
                             Icons.person,
                             size: 64,
@@ -1188,11 +1634,11 @@ class _CustomerProfileState extends State<CustomerProfile>
                         bottom: 4,
                         right: 4,
                         child: GestureDetector(
-                          onTap: _showImagePickerOptions,
+                          onTap: () => _showImagePickerOptions(userData),
                           child: Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2196F3),
+                              color: const Color(0xFF00BCD4), // ✅ Updated color
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: Colors.white,
@@ -1200,7 +1646,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF2196F3).withOpacity(0.3),
+                                  color: const Color(0xFF00BCD4).withOpacity(0.3), // ✅ Updated shadow
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -1220,7 +1666,7 @@ class _CustomerProfileState extends State<CustomerProfile>
               ),
               const SizedBox(height: 24),
               Text(
-                _userData!['name'] ?? 'No Name Available',
+                userData['name'] ?? 'No Name Available',
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
@@ -1233,7 +1679,7 @@ class _CustomerProfileState extends State<CustomerProfile>
               ),
               const SizedBox(height: 8),
               // Add upload hint text
-              if (_userData!['profileImage'] == null || _userData!['profileImage'].toString().isEmpty)
+              if (userData['profileImage'] == null || userData['profileImage'].toString().isEmpty)
                 Text(
                   'Tap camera icon to add profile picture',
                   style: TextStyle(
@@ -1250,7 +1696,7 @@ class _CustomerProfileState extends State<CustomerProfile>
     );
   }
 
-  Widget _buildDetailsSection() {
+  Widget _buildDetailsSection(Map<String, dynamic> userData) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.all(24),
@@ -1259,7 +1705,7 @@ class _CustomerProfileState extends State<CustomerProfile>
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: const Color(0xFF00BCD4).withOpacity(0.05), // ✅ Updated shadow
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -1276,12 +1722,12 @@ class _CustomerProfileState extends State<CustomerProfile>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2196F3).withOpacity(0.1),
+                    color: const Color(0xFF00BCD4).withOpacity(0.1), // ✅ Updated color
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Icon(
                     Icons.info_outline,
-                    color: Color(0xFF2196F3),
+                    color: Color(0xFF00BCD4), // ✅ Updated color
                     size: 24,
                   ),
                 ),
@@ -1292,7 +1738,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF2D3436),
+                      color: Color(0xFF00838F), // ✅ Updated color
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1304,13 +1750,13 @@ class _CustomerProfileState extends State<CustomerProfile>
             _buildDetailRow(
               icon: Icons.email_outlined,
               label: 'Email Address',
-              value: _userData!['email'] ?? 'No email available',
+              value: userData['email'] ?? 'No email available',
             ),
             const SizedBox(height: 24),
             _buildDetailRow(
               icon: Icons.badge_outlined,
               label: 'Role',
-              value: _userData!['role'] ?? 'No role specified',
+              value: userData['role'] ?? 'No role specified',
             ),
           ],
         ),
@@ -1327,10 +1773,10 @@ class _CustomerProfileState extends State<CustomerProfile>
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFE3F2FD),
+        color: const Color(0xFFE3F2FD), // ✅ Updated color
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFBBDEFB),
+          color: const Color(0xFF00BCD4).withOpacity(0.3), // ✅ Updated color
           width: 1,
         ),
       ),
@@ -1340,13 +1786,13 @@ class _CustomerProfileState extends State<CustomerProfile>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF2196F3).withOpacity(0.1),
+              color: const Color(0xFF00BCD4).withOpacity(0.1), // ✅ Updated color
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
               icon,
               size: 20,
-              color: const Color(0xFF2196F3),
+              color: const Color(0xFF00BCD4), // ✅ Updated color
             ),
           ),
           const SizedBox(width: 16),
@@ -1370,7 +1816,7 @@ class _CustomerProfileState extends State<CustomerProfile>
                   value,
                   style: const TextStyle(
                     fontSize: 16,
-                    color: Color(0xFF2D3436),
+                    color: Color(0xFF00838F), // ✅ Updated color
                     fontWeight: FontWeight.w600,
                   ),
                   maxLines: 2,
