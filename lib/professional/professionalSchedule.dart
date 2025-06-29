@@ -6,6 +6,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import '../main.dart';
 import 'viewRoute.dart';
+import 'CancelOrder.dart' ;
 
 //notification code
 void _scheduleOrderReminder({
@@ -380,10 +381,11 @@ class _ProfessionalScheduleState extends State<ProfessionalSchedule> {
     final String time = order['time'] ?? 'N/A Time';
     final String status = order['completionStatus'] ?? 'Unknown';
     final String price = (order['price'] ?? 'N/A').toString();
-    final Map<String, dynamic> locationMap = order['location'] ?? {};
+    final Map<String, dynamic> locationMap = order['clientLocation'] ?? order['location']  ;
     final String location = locationMap['address'] ?? 'N/A';
     final double? lat = locationMap['lat'];
     final double? lng = locationMap['lng'];
+    final String orderId = order['orderId']! ;
 
     // Schedule notification
     final DateTime? orderDateTime = _parseDateTime(order['date'], order['time']);
@@ -592,42 +594,81 @@ class _ProfessionalScheduleState extends State<ProfessionalSchedule> {
                     ),
                   ],
                 ),
-                if (selectedFilter == 'upcoming' && lat != null && lng != null)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0EA5E9), // Changed to darker blue
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF0EA5E9).withOpacity(0.3), // Changed to darker blue
-                          spreadRadius: 0,
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: TextButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ViewRoute(
-                              address: location,
-                              lat: lat,
-                              lng: lng,
-                            ),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.map, color: Colors.white, size: 16),
-                      label: const Text(
-                        'View Route',
-                        style: TextStyle(color: Colors.white, fontSize: 12),
-                      ),
-                    ),
-                  ),
+
               ],
             ),
+            if (selectedFilter == 'upcoming' && lat != null && lng != null)
+              Container(
+                padding: const EdgeInsets.only(top: 12, bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.transparent, // Remove inner container background
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    // View Route Button
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ViewRoute(
+                                address: location,
+                                lat: lat,
+                                lng: lng,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.map, color: Colors.white, size: 16),
+                        label: const Text(
+                          'View Route',
+                          style: TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                        style: TextButton.styleFrom(
+                          backgroundColor: const Color(0xFF0EA5E9),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 12), // ✅ spacing between the buttons
+
+                    // Cancel Order Button
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: () {
+                          cancelOrder(
+                            context: context,
+                            orderId: orderId,
+                            onOrderCancelled: () {
+                              setState(() {});
+                            },
+                          );
+                        },
+                        icon: const Icon(Icons.cancel_rounded, color: Colors.white, size: 16),
+                        label: const Text(
+                          'Cancel Order',
+                          style: TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+
           ],
         ),
       ),
