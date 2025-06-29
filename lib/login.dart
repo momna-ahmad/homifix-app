@@ -7,6 +7,7 @@ import 'homeNavPage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'notification_service.dart'; // Import our notification service
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -135,12 +136,18 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      // Get FCM token and save to Firestore
       final fcmToken = await FirebaseMessaging.instance.getToken();
       if (fcmToken != null) {
         await FirebaseFirestore.instance.collection('users').doc(uid).update({
           'fcmToken': fcmToken,
+          'lastTokenUpdate': FieldValue.serverTimestamp(),
         });
+        print('✅ FCM token updated for user: $uid');
       }
+
+      // IMPORTANT: Refresh notification service for the logged-in user
+      await NotificationService.updateFCMTokenForUser(uid);
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('uid', uid);

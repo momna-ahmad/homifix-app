@@ -43,7 +43,7 @@ class _HomeNavPageState extends State<HomeNavPage> {
     } else if (role == 'client') {
       _pages = [
         LandingPage(),
-        CustomerOrdersPage(userId: widget.userId),
+        CustomerOrderPage(userId: widget.userId),
         CustomerProfile(userId: widget.userId),
         CustomerHistoryPage(userId: widget.userId),
       ];
