@@ -330,7 +330,7 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
 
         final orderLatLng = gmaps.LatLng(loc['lat'], loc['lng']);
         final distance = calculateDistanceKm(_selectedSearchLatLng!, orderLatLng);
-        return distance <= 150;
+        return distance <= 20;
       }).toList();
     } else if (_selectedFilter == JobFilter.nearMe && _currentUserLocation != null) {
       final querySnapshot = await collectionRef.get();
@@ -341,7 +341,7 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
 
         final orderLatLng = gmaps.LatLng(loc['lat'], loc['lng']);
         final distance = calculateDistanceKm(_currentUserLocation!, orderLatLng);
-        return distance <= 150;
+        return distance <= 20;
       }).toList();
     } else if (_selectedFilter == JobFilter.all) {
       final querySnapshot = await collectionRef.get();

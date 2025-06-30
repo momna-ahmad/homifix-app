@@ -305,24 +305,24 @@ class _ProfessionalScheduleState extends State<ProfessionalSchedule> {
             // Orders List
             Container(
               key: _appointmentsKey, // Key for scrolling reference
-              child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                future: _fetchUserOrders(),
+              child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: FirebaseFirestore.instance.collection('users').doc(widget.userId).snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return _buildEmptyState('Error loading data', Icons.error);
                   }
-                  if (snapshot.connectionState == ConnectionState.waiting) {
+                  if (!snapshot.hasData) {
                     return const Center(
                       child: Padding(
                         padding: EdgeInsets.all(40),
                         child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0EA5E9)), // Changed to darker blue
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0EA5E9)),
                         ),
                       ),
                     );
                   }
 
-                  final userData = snapshot.data?.data();
+                  final userData = snapshot.data!.data();
                   final List<dynamic> rawOrders = userData?['orders'] ?? [];
                   List<Map<String, dynamic>> orders = rawOrders.whereType<Map<String, dynamic>>().toList();
 
@@ -335,27 +335,25 @@ class _ProfessionalScheduleState extends State<ProfessionalSchedule> {
                     return dateTimeA.compareTo(dateTimeB);
                   });
 
-                  // Filter orders
                   final now = DateTime.now();
                   List<Map<String, dynamic>> filteredOrders = orders.where((order) {
                     final orderDateTime = _parseDateTime(order['date'], order['time']);
                     if (orderDateTime == null) return false;
+
                     if (selectedFilter == 'upcoming') {
-                      return orderDateTime.isAfter(now);
+                      return orderDateTime.isAfter(now) &&
+                          (order['completionStatus']?.toString().toLowerCase() == 'pending');
                     } else {
-                      return orderDateTime.isBefore(now);
+                      return orderDateTime.isBefore(now) || (order['completionStatus']?.toString().toLowerCase() == 'completed');
                     }
                   }).toList();
 
                   if (filteredOrders.isEmpty) {
                     return _buildEmptyState(
-                      selectedFilter == 'upcoming' ? 'No upcoming orders' : 'No order history',
+                      selectedFilter == 'upcoming' ? 'No pending upcoming orders' : 'No order history',
                       selectedFilter == 'upcoming' ? Icons.schedule : Icons.history,
                     );
                   }
-
-                  print("Raw orders: $filteredOrders");
-
 
                   return ListView.builder(
                     shrinkWrap: true,
