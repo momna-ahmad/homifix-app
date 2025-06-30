@@ -768,127 +768,181 @@ class _ProfessionalOrdersPageState extends State<ProfessionalOrdersPage> {
   }
 
   Widget _buildJobCard(BuildContext context, String orderId, Map<String, dynamic> data, List<String> requestsSent) {
-    final bool isLoading = _loadingOrderId == orderId; // Check if THIS order is loading
+    final bool isLoading = _loadingOrderId == orderId;
     final bool hasRequested = requestsSent.contains(orderId);
+    final bool hasDescription = data.containsKey('description') &&
+        data['description'] != null &&
+        data['description'].toString().trim().isNotEmpty;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            spreadRadius: 0,
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0EA5E9).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+    return StatefulBuilder(
+      builder: (context, setState) {
+        bool isExpanded = false; // Initial state
+
+        return StatefulBuilder(
+          builder: (context, localSetState) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    spreadRadius: 0,
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                  child: const Icon(
-                    Icons.category,
-                    color: Color(0xFF0EA5E9),
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    data['category'] ?? 'Unknown Category',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E293B),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header Row
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0EA5E9).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.category,
+                            color: Color(0xFF0EA5E9),
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            data['category'] ?? 'Unknown Category',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                        ),
+                        if (hasDescription)
+                          InkWell(
+                            onTap: () {
+                              localSetState(() {
+                                isExpanded = !isExpanded;
+                              });
+                            },
+                            child: Row(
+                              children: [
+                                Text(
+                                  isExpanded ? "Hide Details" : "Show Details",
+                                  style: TextStyle(
+                                    color: Colors.blue[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Icon(
+                                  isExpanded
+                                      ? Icons.keyboard_arrow_up
+                                      : Icons.keyboard_arrow_down,
+                                  color: Colors.blue[600],
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildDetailRow(Icons.home_repair_service, 'Service', data['service'] ?? 'N/A'),
-            const SizedBox(height: 8),
-            _buildDetailRow(Icons.location_on, 'Location', data['location']['address'] ?? 'N/A'),
-            const SizedBox(height: 8),
-            _buildDetailRow(Icons.calendar_today, 'Date', data['serviceDate'] ?? 'N/A'),
-            const SizedBox(height: 8),
-            _buildDetailRow(Icons.access_time, 'Time', data['serviceTime'] ?? 'N/A'),
-            const SizedBox(height: 8),
-            _buildDetailRow(Icons.payments, 'Offer', data['priceOffer'] ?? 'Not specified'),
 
-            const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
-            Align(
-              alignment: Alignment.centerRight,
-              child: ElevatedButton.icon(
-                onPressed: isLoading || hasRequested ? null : () =>
-                    _showRequestDialog(orderId),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ).copyWith(
-                  backgroundColor: MaterialStateProperty.resolveWith<Color>(
-                        (Set<MaterialState> states) {
-                      if (states.contains(MaterialState.disabled)) {
-                        return Colors.grey; // Grey when disabled
-                      }
-                      return const Color(0xFF0EA5E9); // Blue when enabled
-                    },
-                  ),
-                  foregroundColor: MaterialStateProperty.resolveWith<Color>(
-                        (Set<MaterialState> states) {
-                      return Colors.white; // Text and icon always white
-                    },
-                  ),
-                  elevation: MaterialStateProperty.resolveWith<double>(
-                        (Set<MaterialState> states) {
-                      if (states.contains(MaterialState.disabled)) {
-                        return 0; // No elevation when disabled
-                      }
-                      return 4; // Default elevation when enabled
-                    },
-                  ),
-                ),
-                icon: isLoading
-                    ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-                    : hasRequested
-                    ? const Icon(Icons.check_circle_outline, size: 16)
-                    : const Icon(Icons.send, size: 16),
-                label: Text(
-                  isLoading ? 'Sending...' : (hasRequested ? 'Requested' : 'Send Request'),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+                    _buildDetailRow(Icons.home_repair_service, 'Service', data['service'] ?? 'N/A'),
+                    const SizedBox(height: 8),
+                    _buildDetailRow(Icons.location_on, 'Location', data['location']['address'] ?? 'N/A'),
+                    const SizedBox(height: 8),
+                    _buildDetailRow(Icons.calendar_today, 'Date', data['serviceDate'] ?? 'N/A'),
+                    const SizedBox(height: 8),
+                    _buildDetailRow(Icons.access_time, 'Time', data['serviceTime'] ?? 'N/A'),
+                    const SizedBox(height: 8),
+                    _buildDetailRow(Icons.payments, 'Offer', data['priceOffer'] ?? 'Not specified'),
+
+                    if (hasDescription && isExpanded) ...[
+                      const SizedBox(height: 12),
+                      const Divider(),
+                      const Text(
+                        'Description:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        data['description'],
+                        style: const TextStyle(
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 16),
+
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton.icon(
+                        onPressed: isLoading || hasRequested ? null : () => _showRequestDialog(orderId),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ).copyWith(
+                          backgroundColor: MaterialStateProperty.resolveWith<Color>(
+                                (Set<MaterialState> states) {
+                              if (states.contains(MaterialState.disabled)) return Colors.grey;
+                              return const Color(0xFF0EA5E9);
+                            },
+                          ),
+                          foregroundColor: MaterialStateProperty.all(Colors.white),
+                          elevation: MaterialStateProperty.resolveWith<double>(
+                                (Set<MaterialState> states) {
+                              if (states.contains(MaterialState.disabled)) return 0;
+                              return 4;
+                            },
+                          ),
+                        ),
+                        icon: isLoading
+                            ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                            : hasRequested
+                            ? const Icon(Icons.check_circle_outline, size: 16)
+                            : const Icon(Icons.send, size: 16),
+                        label: Text(
+                          isLoading ? 'Sending...' : (hasRequested ? 'Requested' : 'Send Request'),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
+
+
 
   Widget _buildDetailRow(IconData icon, String label, String value) {
     return Row(
