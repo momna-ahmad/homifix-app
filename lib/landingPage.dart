@@ -765,14 +765,7 @@ class _LandingPageState extends State<LandingPage> {
                             color: Colors.black,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                          ),
-                        ),
+
                         const SizedBox(height: 20),
 
                         // Promotional Banner with updated colors
@@ -794,7 +787,7 @@ class _LandingPageState extends State<LandingPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text(
-                                      "Find the best cleaning services in your city",
+                                      "Best services in your city",
                                       style: TextStyle(
                                         fontSize: 28,
                                         fontWeight: FontWeight.bold,
