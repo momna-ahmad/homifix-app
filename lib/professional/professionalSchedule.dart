@@ -354,6 +354,9 @@ class _ProfessionalScheduleState extends State<ProfessionalSchedule> {
                     );
                   }
 
+                  print("Raw orders: $filteredOrders");
+
+
                   return ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -381,11 +384,11 @@ class _ProfessionalScheduleState extends State<ProfessionalSchedule> {
     final String time = order['time'] ?? 'N/A Time';
     final String status = order['completionStatus'] ?? 'Unknown';
     final String price = (order['price'] ?? 'N/A').toString();
-    final Map<String, dynamic> locationMap = order['clientLocation'] ?? order['location']  ;
+    final Map<String, dynamic> locationMap = order['location'] ?? {}  ;
     final String location = locationMap['address'] ?? 'N/A';
     final double? lat = locationMap['lat'];
     final double? lng = locationMap['lng'];
-    final String orderId = order['orderId']! ;
+    final String orderId = order['orderId'] ?? null ;
 
     // Schedule notification
     final DateTime? orderDateTime = _parseDateTime(order['date'], order['time']);

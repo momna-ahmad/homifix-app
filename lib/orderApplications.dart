@@ -272,11 +272,11 @@ class ApplicationActions {
         transaction.update(professionalDocRef, {
           'orders': FieldValue.arrayUnion([
             {
-              'location': [
-                locationState.currentLocation, // address
-                locationState.currentLat!, // lat
-                locationState.currentLng!, // lng
-              ],
+              'location': {
+                'address': locationState.currentLocation,
+                'lat': locationState.currentLat!,
+                'lng': locationState.currentLng!,
+              },
               'date': orderData['serviceDate'],
               'time': orderData['serviceTime'],
               'price': applications[applicationIndex]['price'],
