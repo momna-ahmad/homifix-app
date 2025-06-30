@@ -1357,6 +1357,21 @@ class _ProfessionalForCustomerState extends State<ProfessionalForCustomer> {
                                           ),
                                           child: const Icon(Icons.star, color: Colors.white, size: 16),
                                         ),
+                                      )
+                                    else
+                                      Positioned(
+                                        bottom: 5,
+                                        right: 5,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.red,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: Colors.white, width: 2),
+                                            boxShadow: [BoxShadow(color: Colors.red.shade300, blurRadius: 4, offset: const Offset(0, 2))],
+                                          ),
+                                          child: const Icon(Icons.close, color: Colors.white, size: 16),
+                                        ),
                                       ),
                                   ],
                                 ),
