@@ -69,7 +69,7 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
         height: 80,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          color: Colors.grey[100],
+          color: const Color(0xFFE3F2FD),
         ),
         child: const Center(
           child: Text(
@@ -86,18 +86,17 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
         height: 80,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          color: Colors.grey[100],
+          color: const Color(0xFFE3F2FD),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: Image.network(
             widget.imageUrls[0],
             fit: BoxFit.cover,
-            errorBuilder:
-                (context, error, stackTrace) => Container(
-                  color: Colors.grey[300],
-                  child: const Icon(Icons.error),
-                ),
+            errorBuilder: (context, error, stackTrace) => Container(
+              color: const Color(0xFFE3F2FD),
+              child: const Icon(Icons.error, color: Color(0xFF00BCD4)),
+            ),
           ),
         ),
       );
@@ -108,7 +107,7 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
       height: 80,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        color: Colors.grey[100],
+        color: const Color(0xFFE3F2FD),
       ),
       child: Stack(
         children: [
@@ -126,11 +125,10 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
                 return Image.network(
                   widget.imageUrls[index],
                   fit: BoxFit.cover,
-                  errorBuilder:
-                      (context, error, stackTrace) => Container(
-                        color: Colors.grey[300],
-                        child: const Icon(Icons.error),
-                      ),
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: const Color(0xFFE3F2FD),
+                    child: const Icon(Icons.error, color: Color(0xFF00BCD4)),
+                  ),
                 );
               },
             ),
@@ -143,16 +141,15 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(
                 widget.imageUrls.length,
-                (index) => Container(
+                    (index) => Container(
                   width: 4,
                   height: 4,
                   margin: const EdgeInsets.symmetric(horizontal: 1),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color:
-                        _currentIndex == index
-                            ? Colors.white
-                            : Colors.white.withOpacity(0.5),
+                    color: _currentIndex == index
+                        ? Colors.white
+                        : Colors.white.withOpacity(0.5),
                   ),
                 ),
               ),
@@ -161,6 +158,196 @@ class _ServiceImageCarouselState extends State<ServiceImageCarousel> {
         ],
       ),
     );
+  }
+}
+
+// Rating widget using onSnapshot for real-time updates
+class ServiceRatingWidget extends StatefulWidget {
+  final String providerUserId;
+  final String serviceName;
+
+  const ServiceRatingWidget({
+    Key? key,
+    required this.providerUserId,
+    required this.serviceName,
+  }) : super(key: key);
+
+  @override
+  State<ServiceRatingWidget> createState() => _ServiceRatingWidgetState();
+}
+
+class _ServiceRatingWidgetState extends State<ServiceRatingWidget> {
+  StreamSubscription<QuerySnapshot>? _reviewsSubscription;
+  double _currentRating = 0.0;
+  bool _isLoading = true;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupRealtimeRatingListener();
+  }
+
+  void _setupRealtimeRatingListener() {
+    print('🔄 SETTING UP REAL-TIME RATING LISTENER');
+    print('📍 Path: users/${widget.providerUserId}/reviews');
+    print('🎯 Service: ${widget.serviceName}');
+
+    _reviewsSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.providerUserId)
+        .collection('reviews')
+        .snapshots()
+        .listen(
+          (QuerySnapshot reviewsSnapshot) {
+        print('📡 REAL-TIME UPDATE RECEIVED for ${widget.serviceName}');
+        print('📊 Reviews count: ${reviewsSnapshot.docs.length}');
+
+        if (reviewsSnapshot.docs.isEmpty) {
+          print('❌ NO REVIEWS FOUND - Setting rating to 0.0');
+          if (mounted) {
+            setState(() {
+              _currentRating = 0.0;
+              _isLoading = false;
+              _hasError = false;
+            });
+          }
+          return;
+        }
+
+        double totalRating = 0.0;
+        int validReviews = 0;
+
+        print('📋 PROCESSING REAL-TIME REVIEWS:');
+        for (var reviewDoc in reviewsSnapshot.docs) {
+          final reviewData = reviewDoc.data() as Map<String, dynamic>;
+          final rating = reviewData['rating'];
+
+          print('   📄 Review ID: ${reviewDoc.id}');
+          print('   ⭐ Rating value: $rating');
+
+          if (rating != null) {
+            double ratingValue = 0.0;
+            if (rating is int) {
+              ratingValue = rating.toDouble();
+            } else if (rating is double) {
+              ratingValue = rating;
+            } else if (rating is String) {
+              ratingValue = double.tryParse(rating) ?? 0.0;
+            }
+
+            totalRating += ratingValue;
+            validReviews++;
+            print('   ✅ Added rating: $ratingValue');
+          }
+        }
+
+        if (validReviews == 0) {
+          print('❌ NO VALID RATINGS - Setting to 0.0');
+          if (mounted) {
+            setState(() {
+              _currentRating = 0.0;
+              _isLoading = false;
+              _hasError = false;
+            });
+          }
+          return;
+        }
+
+        double averageRating = totalRating / validReviews;
+        print('🎯 REAL-TIME CALCULATION:');
+        print('   📊 Total Rating: $totalRating');
+        print('   📈 Valid Reviews: $validReviews');
+        print('   ⭐ Average Rating: $averageRating');
+        print('✅ REAL-TIME UPDATE: ${widget.serviceName} = $averageRating');
+
+        if (mounted) {
+          setState(() {
+            _currentRating = averageRating;
+            _isLoading = false;
+            _hasError = false;
+          });
+        }
+      },
+      onError: (error) {
+        print('❌ REAL-TIME RATING ERROR: $error');
+        if (mounted) {
+          setState(() {
+            _currentRating = 0.0;
+            _isLoading = false;
+            _hasError = true;
+          });
+        }
+      },
+    );
+  }
+
+  Widget _buildRatingWidget(double rating) {
+    return Row(
+      children: [
+        const Icon(Icons.star, color: Colors.amber, size: 16),
+        const SizedBox(width: 4),
+        Text(
+          rating.toStringAsFixed(1),
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    print('🔄 DISPOSING REAL-TIME RATING LISTENER for ${widget.serviceName}');
+    _reviewsSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Row(
+        children: [
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 1,
+              color: const Color(0xFF00BCD4),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            "Loading rating...",
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (_hasError) {
+      print('❌ Error in ServiceRatingWidget for service: ${widget.serviceName}');
+      return Row(
+        children: [
+          _buildRatingWidget(0.0),
+          const SizedBox(width: 4),
+          Icon(
+            Icons.error_outline,
+            size: 12,
+            color: Colors.red[400],
+          ),
+        ],
+      );
+    }
+
+    print('🎯 DISPLAYING REAL-TIME RATING: $_currentRating for service: ${widget.serviceName}');
+    return _buildRatingWidget(_currentRating);
   }
 }
 
@@ -179,21 +366,54 @@ class _LandingPageState extends State<LandingPage> {
   String userName = 'Guest';
   int _selectedIndex = 0;
   String? _currentUserId;
-  String? _currentUserRole; // ✅ ADD USER ROLE
+  String? _currentUserRole;
 
   BannerAd? _bannerAd;
   bool _isBannerAdReady = false;
   bool _isAdInitialized = false;
+
+  // Hardcoded categories with their icons and colors
+  final List<Map<String, dynamic>> categories = [
+    {
+      'name': 'Cleaning',
+      'icon': Icons.cleaning_services,
+      'color': const Color(0xFF00BCD4),
+    },
+    {
+      'name': 'Repair',
+      'icon': Icons.build,
+      'color': const Color(0xFF0288D1),
+    },
+    {
+      'name': 'Painting',
+      'icon': Icons.format_paint,
+      'color': const Color(0xFF00ACC1),
+    },
+    {
+      'name': 'Laundry',
+      'icon': Icons.local_laundry_service,
+      'color': const Color(0xFF0097A7),
+    },
+    {
+      'name': 'Plumbing',
+      'icon': Icons.plumbing,
+      'color': const Color(0xFF00838F),
+    },
+    {
+      'name': 'Electrical',
+      'icon': Icons.electrical_services,
+      'color': const Color(0xFF006064),
+    },
+  ];
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
     _initializeAds();
-    _loadUserData(); // ✅ LOAD BOTH USER NAME AND ROLE
+    _loadUserData();
   }
 
-  // ✅ LOAD USER DATA INCLUDING ROLE
   Future<void> _loadUserData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -202,18 +422,16 @@ class _LandingPageState extends State<LandingPage> {
       });
 
       try {
-        final userDoc =
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .get();
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
 
         if (userDoc.exists && mounted) {
           final userData = userDoc.data()!;
           setState(() {
             userName = userData['name'] ?? user.displayName ?? 'User';
-            _currentUserRole =
-                userData['role'] ?? 'customer'; // ✅ GET USER ROLE
+            _currentUserRole = userData['role'] ?? 'customer';
           });
 
           print('✅ User data loaded:');
@@ -223,82 +441,12 @@ class _LandingPageState extends State<LandingPage> {
         }
       } catch (e) {
         print('❌ Error loading user data: $e');
-        // Set default role if error occurs
         setState(() {
           _currentUserRole = 'customer';
         });
       }
     } else {
       print('❌ No user logged in');
-    }
-  }
-
-  Future<double> _fetchUserRating(String userId) async {
-    try {
-      print('🔍 FETCHING RATING FROM FIRESTORE DATABASE');
-      print('📍 Path: users/$userId/reviews');
-      print('🎯 Looking for userId: $userId');
-
-      final reviewsQuery =
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .collection('reviews')
-              .get();
-
-      print(
-        '📊 DATABASE QUERY RESULT: Found ${reviewsQuery.docs.length} reviews',
-      );
-
-      if (reviewsQuery.docs.isEmpty) {
-        print('❌ NO REVIEWS FOUND - Returning 0.0');
-        return 0.0;
-      }
-
-      double totalRating = 0.0;
-      int validReviews = 0;
-
-      print('📋 PROCESSING EACH REVIEW FROM DATABASE:');
-      for (var reviewDoc in reviewsQuery.docs) {
-        final reviewData = reviewDoc.data();
-        final rating = reviewData['rating'];
-
-        print('   📄 Review ID: ${reviewDoc.id}');
-        print('   ⭐ Rating field value: $rating');
-
-        if (rating != null) {
-          double ratingValue = 0.0;
-          if (rating is int) {
-            ratingValue = rating.toDouble();
-          } else if (rating is double) {
-            ratingValue = rating;
-          } else if (rating is String) {
-            ratingValue = double.tryParse(rating) ?? 0.0;
-          }
-
-          totalRating += ratingValue;
-          validReviews++;
-          print('   ✅ Added rating: $ratingValue');
-        }
-      }
-
-      if (validReviews == 0) {
-        print('❌ NO VALID RATINGS FOUND - Returning 0.0');
-        return 0.0;
-      }
-
-      double averageRating = totalRating / validReviews;
-      print('🎯 FINAL CALCULATION:');
-      print('   📊 Total Rating: $totalRating');
-      print('   📈 Valid Reviews: $validReviews');
-      print('   ⭐ Average Rating: $averageRating');
-      print('✅ RETURNING RATING FROM DATABASE: $averageRating');
-
-      return averageRating;
-    } catch (e) {
-      print('❌ ERROR FETCHING FROM DATABASE: $e');
-      print('🔄 Returning 0.0 due to error');
-      return 0.0;
     }
   }
 
@@ -331,8 +479,7 @@ class _LandingPageState extends State<LandingPage> {
       adUnitId = 'ca-app-pub-3940256099942544/6300978111';
       print('🧪 Using TEST ad unit ID: $adUnitId');
     } else {
-      adUnitId =
-          dotenv.env['ADMOB_BANNER_ID'] ??
+      adUnitId = dotenv.env['ADMOB_BANNER_ID'] ??
           'ca-app-pub-3940256099942544/6300978111';
       print('💰 Using ad unit ID: $adUnitId');
     }
@@ -438,7 +585,7 @@ class _LandingPageState extends State<LandingPage> {
         TextSpan(
           text: source.substring(index, index + query.length),
           style: const TextStyle(
-            color: Colors.blue,
+            color: Color(0xFF00BCD4),
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -467,7 +614,7 @@ class _LandingPageState extends State<LandingPage> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.grey[300]!, width: 0.5),
+          border: Border.all(color: const Color(0xFFE3F2FD), width: 0.5),
         ),
         child: const Center(
           child: Row(
@@ -476,7 +623,10 @@ class _LandingPageState extends State<LandingPage> {
               SizedBox(
                 width: 16,
                 height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF00BCD4),
+                ),
               ),
               SizedBox(width: 8),
               Text(
@@ -499,7 +649,7 @@ class _LandingPageState extends State<LandingPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!, width: 0.5),
+        border: Border.all(color: const Color(0xFFE3F2FD), width: 0.5),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -526,50 +676,23 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 
-  Widget _buildCategoryIcon(String category) {
-    IconData iconData;
-    Color backgroundColor;
-
-    switch (category.toLowerCase()) {
-      case 'cleaning':
-        iconData = Icons.cleaning_services;
-        backgroundColor = Colors.cyan[100]!;
-        break;
-      case 'repair':
-        iconData = Icons.build;
-        backgroundColor = Colors.purple[100]!;
-        break;
-      case 'painting':
-        iconData = Icons.format_paint;
-        backgroundColor = Colors.pink[100]!;
-        break;
-      case 'laundry':
-        iconData = Icons.local_laundry_service;
-        backgroundColor = Colors.green[100]!;
-        break;
-      case 'plumbing':
-        iconData = Icons.plumbing;
-        backgroundColor = Colors.blue[100]!;
-        break;
-      case 'electrical':
-        iconData = Icons.electrical_services;
-        backgroundColor = Colors.yellow[100]!;
-        break;
-      default:
-        iconData = Icons.miscellaneous_services;
-        backgroundColor = Colors.grey[100]!;
-    }
+  Widget _buildCategoryIcon(Map<String, dynamic> category) {
+    final isSelected = selectedCategory == category['name'];
 
     return Container(
       width: 60,
       height: 60,
       decoration: BoxDecoration(
-        color: selectedCategory == category ? Colors.cyan : backgroundColor,
+        color: isSelected ? category['color'] : const Color(0xFFE3F2FD),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected ? category['color'] : const Color(0xFF00BCD4).withOpacity(0.3),
+          width: 1,
+        ),
       ),
       child: Icon(
-        iconData,
-        color: selectedCategory == category ? Colors.white : Colors.grey[700],
+        category['icon'],
+        color: isSelected ? Colors.white : category['color'],
         size: 28,
       ),
     );
@@ -579,36 +702,19 @@ class _LandingPageState extends State<LandingPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
+        color: const Color(0xFFE3F2FD),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!, width: 0.5),
+        border: Border.all(color: const Color(0xFF00BCD4).withOpacity(0.3), width: 0.5),
       ),
       child: Text(
         category.toUpperCase(),
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w500,
-          color: Colors.grey[700],
+          color: Color(0xFF00838F),
           letterSpacing: 0.5,
         ),
       ),
-    );
-  }
-
-  Widget _buildRatingWidget(double rating) {
-    return Row(
-      children: [
-        const Icon(Icons.star, color: Colors.amber, size: 16),
-        const SizedBox(width: 4),
-        Text(
-          rating.toStringAsFixed(1),
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Colors.black,
-          ),
-        ),
-      ],
     );
   }
 
@@ -631,8 +737,8 @@ class _LandingPageState extends State<LandingPage> {
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: CircleAvatar(
-              backgroundColor: Colors.cyan,
-              child: Icon(Icons.person, color: Colors.white),
+              backgroundColor: const Color(0xFF00BCD4),
+              child: const Icon(Icons.person, color: Colors.white),
             ),
           ),
         ],
@@ -659,17 +765,10 @@ class _LandingPageState extends State<LandingPage> {
                             color: Colors.black,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Find the best cleaning services in your city",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                          ),
-                        ),
+
                         const SizedBox(height: 20),
 
-                        // Promotional Banner
+                        // Promotional Banner with updated colors
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(20),
@@ -688,7 +787,7 @@ class _LandingPageState extends State<LandingPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text(
-                                      "25% OFF",
+                                      "Best services in your city",
                                       style: TextStyle(
                                         fontSize: 28,
                                         fontWeight: FontWeight.bold,
@@ -696,7 +795,7 @@ class _LandingPageState extends State<LandingPage> {
                                       ),
                                     ),
                                     const Text(
-                                      "On home services",
+                                      "On Home Services",
                                       style: TextStyle(
                                         fontSize: 16,
                                         color: Colors.white70,
@@ -707,15 +806,13 @@ class _LandingPageState extends State<LandingPage> {
                                       onPressed: () {},
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.white,
-                                        foregroundColor: Colors.cyan,
+                                        foregroundColor: const Color(0xFF00BCD4),
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 24,
                                           vertical: 12,
                                         ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            25,
-                                          ),
+                                          borderRadius: BorderRadius.circular(25),
                                         ),
                                       ),
                                       child: const Text(
@@ -742,7 +839,7 @@ class _LandingPageState extends State<LandingPage> {
 
                   const SizedBox(height: 16),
 
-                  // Search bar
+                  // Search bar with updated colors
                   Container(
                     color: Colors.white,
                     padding: const EdgeInsets.symmetric(
@@ -759,39 +856,38 @@ class _LandingPageState extends State<LandingPage> {
                         hintText: "Search services...",
                         prefixIcon: const Icon(
                           Icons.search,
-                          color: Colors.grey,
+                          color: Color(0xFF00BCD4),
                         ),
-                        suffixIcon:
-                            searchQuery.isNotEmpty
-                                ? IconButton(
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    FocusScope.of(context).unfocus();
-                                  },
-                                )
-                                : null,
+                        suffixIcon: searchQuery.isNotEmpty
+                            ? IconButton(
+                          icon: const Icon(Icons.clear, color: Color(0xFF00BCD4)),
+                          onPressed: () {
+                            _searchController.clear();
+                            FocusScope.of(context).unfocus();
+                          },
+                        )
+                            : null,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
+                          borderSide: const BorderSide(color: Color(0xFFE3F2FD)),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
+                          borderSide: const BorderSide(color: Color(0xFFE3F2FD)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Colors.cyan),
+                          borderSide: const BorderSide(color: Color(0xFF00BCD4)),
                         ),
                         filled: true,
-                        fillColor: Colors.grey[50],
+                        fillColor: const Color(0xFFF8FDFF),
                       ),
                     ),
                   ),
 
                   const SizedBox(height: 16),
 
-                  // Categories
+                  // Categories with hardcoded data
                   Container(
                     color: Colors.white,
                     padding: const EdgeInsets.all(16),
@@ -807,69 +903,47 @@ class _LandingPageState extends State<LandingPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        StreamBuilder<QuerySnapshot>(
-                          stream:
-                              FirebaseFirestore.instance
-                                  .collection('services')
-                                  .snapshots(),
-                          builder: (context, snapshot) {
-                            if (!snapshot.hasData) {
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            }
-
-                            final docs = snapshot.data!.docs;
-                            final categories =
-                                docs
-                                    .map((doc) => doc['category'])
-                                    .toSet()
-                                    .toList();
-
-                            return SizedBox(
-                              height: 100,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                itemCount: categories.length,
-                                itemBuilder: (context, index) {
-                                  final category = categories[index];
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: 16),
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          if (selectedCategory == category) {
-                                            selectedCategory = null;
-                                          } else {
-                                            selectedCategory = category;
-                                          }
-                                          _searchController.clear();
-                                          searchQuery = '';
-                                        });
-                                      },
-                                      child: Column(
-                                        children: [
-                                          _buildCategoryIcon(category),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            category,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                              color:
-                                                  selectedCategory == category
-                                                      ? Colors.cyan
-                                                      : Colors.grey[700],
-                                            ),
-                                          ),
-                                        ],
+                        SizedBox(
+                          height: 100,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: categories.length,
+                            itemBuilder: (context, index) {
+                              final category = categories[index];
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 16),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      if (selectedCategory == category['name']) {
+                                        selectedCategory = null;
+                                      } else {
+                                        selectedCategory = category['name'];
+                                      }
+                                      _searchController.clear();
+                                      searchQuery = '';
+                                    });
+                                  },
+                                  child: Column(
+                                    children: [
+                                      _buildCategoryIcon(category),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        category['name'],
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: selectedCategory == category['name']
+                                              ? const Color(0xFF00BCD4)
+                                              : Colors.grey[700],
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            );
-                          },
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ],
                     ),
@@ -882,7 +956,7 @@ class _LandingPageState extends State<LandingPage> {
 
                   // Top Services
                   Container(
-                    color: Colors.white,
+                    color: const Color(0xFFE3F2FD),
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -896,37 +970,46 @@ class _LandingPageState extends State<LandingPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
+                        // Replace the existing StreamBuilder section with this corrected version
                         StreamBuilder<QuerySnapshot>(
-                          stream:
-                              selectedCategory != null
-                                  ? FirebaseFirestore.instance
-                                      .collection('services')
-                                      .where(
-                                        'category',
-                                        isEqualTo: selectedCategory,
-                                      )
-                                      .snapshots()
-                                  : FirebaseFirestore.instance
-                                      .collection('services')
-                                      .snapshots(),
+                          stream: selectedCategory != null
+                              ? FirebaseFirestore.instance
+                              .collection('services')
+                              .where('category', isEqualTo: selectedCategory)
+                              .snapshots()
+                              : FirebaseFirestore.instance.collection('services').snapshots(),
                           builder: (context, snapshot) {
                             if (!snapshot.hasData) {
                               return const Center(
-                                child: CircularProgressIndicator(),
+                                child: CircularProgressIndicator(
+                                  color: Color(0xFF00BCD4),
+                                ),
                               );
                             }
                             final services = snapshot.data!.docs;
 
-                            final filteredServices =
-                                services.where((service) {
-                                  final data =
-                                      service.data() as Map<String, dynamic>;
-                                  final serviceName =
-                                      (data['service'] ?? '')
-                                          .toString()
-                                          .toLowerCase();
-                                  return serviceName.contains(searchQuery);
-                                }).toList();
+                            // CORRECTED FILTERING LOGIC - Remove case sensitivity issues
+                            final filteredServices = services.where((service) {
+                              final data = service.data() as Map<String, dynamic>;
+
+                              // Get service name and handle null/empty cases
+                              final serviceName = (data['service'] ?? '').toString();
+                              final category = (data['category'] ?? '').toString();
+                              final providerName = (data['providerName'] ?? '').toString();
+                              final description = (data['description'] ?? '').toString();
+
+                              // If there's a search query, filter by it (case-insensitive)
+                              if (searchQuery.isNotEmpty) {
+                                final query = searchQuery.toLowerCase();
+                                return serviceName.toLowerCase().contains(query) ||
+                                    category.toLowerCase().contains(query) ||
+                                    providerName.toLowerCase().contains(query) ||
+                                    description.toLowerCase().contains(query);
+                              }
+
+                              // If no search query, show all services (category filter is already applied in the stream)
+                              return true;
+                            }).toList();
 
                             if (filteredServices.isEmpty) {
                               return const Center(
@@ -949,28 +1032,18 @@ class _LandingPageState extends State<LandingPage> {
                               itemCount: filteredServices.length,
                               itemBuilder: (context, index) {
                                 final service = filteredServices[index];
-                                final data =
-                                    service.data() as Map<String, dynamic>;
+                                final data = service.data() as Map<String, dynamic>;
                                 final serviceName = data['service'] ?? '';
                                 final price = data['price'] ?? '';
-                                final imageUrls = List<String>.from(
-                                  data['imageUrls'] ?? [],
-                                );
+                                final imageUrls = List<String>.from(data['imageUrls'] ?? []);
                                 final category = data['category'] ?? '';
                                 final providerUserId = data['userId'] ?? '';
-                                final providerName =
-                                    data['providerName'] ?? 'Professional';
+                                final providerName = data['providerName'] ?? 'Professional';
 
                                 print('🏷️ Processing service: $serviceName');
-                                print(
-                                  '👤 Service Provider ID: $providerUserId',
-                                );
-                                print(
-                                  '🔑 Current Customer ID: $_currentUserId',
-                                );
-                                print(
-                                  '🎭 Current User Role: $_currentUserRole',
-                                );
+                                print('👤 Service Provider ID: $providerUserId');
+                                print('🔑 Current Customer ID: $_currentUserId');
+                                print('🎭 Current User Role: $_currentUserRole');
 
                                 return Card(
                                   margin: const EdgeInsets.only(bottom: 16),
@@ -985,7 +1058,7 @@ class _LandingPageState extends State<LandingPage> {
                                       borderRadius: BorderRadius.circular(12),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Colors.grey.withOpacity(0.15),
+                                          color: const Color(0xFF00BCD4).withOpacity(0.1),
                                           spreadRadius: 1,
                                           blurRadius: 4,
                                           offset: const Offset(0, 2),
@@ -1001,17 +1074,16 @@ class _LandingPageState extends State<LandingPage> {
                                             imageUrls: imageUrls,
                                             serviceId: service.id,
                                           ),
-
                                           const SizedBox(width: 16),
-
-                                          // Service Details
                                           // Service Details
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Text(
+                                                // CORRECTED: Use RichText for highlighting search terms
+                                                searchQuery.isNotEmpty
+                                                    ? highlightText(serviceName, searchQuery)
+                                                    : Text(
                                                   serviceName,
                                                   style: const TextStyle(
                                                     fontSize: 18,
@@ -1023,32 +1095,25 @@ class _LandingPageState extends State<LandingPage> {
 
                                                 // Category chip
                                                 _buildCategoryChip(category),
-
                                                 const SizedBox(height: 6),
 
                                                 // Service description/details
-                                                if (data['description'] !=
-                                                        null &&
-                                                    data['description']
-                                                        .toString()
-                                                        .isNotEmpty)
+                                                if (data['description'] != null &&
+                                                    data['description'].toString().isNotEmpty)
                                                   Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
                                                     children: [
-                                                      Text(
+                                                      searchQuery.isNotEmpty
+                                                          ? highlightText(data['description'], searchQuery)
+                                                          : Text(
                                                         data['description'],
                                                         style: TextStyle(
                                                           fontSize: 14,
-                                                          color:
-                                                              Colors.grey[700],
+                                                          color: Colors.grey[700],
                                                           height: 1.3,
                                                         ),
                                                         maxLines: 2,
-                                                        overflow:
-                                                            TextOverflow
-                                                                .ellipsis,
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
                                                       const SizedBox(height: 6),
                                                     ],
@@ -1072,168 +1137,67 @@ class _LandingPageState extends State<LandingPage> {
                                                     color: Colors.black,
                                                   ),
                                                 ),
-                                                // Rating from database
-                                                FutureBuilder<double>(
-                                                  future: _fetchUserRating(
-                                                    providerUserId,
-                                                  ),
-                                                  builder: (
-                                                    context,
-                                                    ratingSnapshot,
-                                                  ) {
-                                                    if (ratingSnapshot
-                                                            .connectionState ==
-                                                        ConnectionState
-                                                            .waiting) {
-                                                      return Row(
-                                                        children: [
-                                                          SizedBox(
-                                                            width: 12,
-                                                            height: 12,
-                                                            child: CircularProgressIndicator(
-                                                              strokeWidth: 1,
-                                                              color:
-                                                                  Colors
-                                                                      .grey[400],
-                                                            ),
-                                                          ),
-                                                          const SizedBox(
-                                                            width: 8,
-                                                          ),
-                                                          Text(
-                                                            "Loading rating...",
-                                                            style: TextStyle(
-                                                              fontSize: 12,
-                                                              color:
-                                                                  Colors
-                                                                      .grey[600],
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      );
-                                                    }
 
-                                                    if (ratingSnapshot
-                                                        .hasError) {
-                                                      print(
-                                                        '❌ Error in rating FutureBuilder: ${ratingSnapshot.error}',
-                                                      );
-                                                      return _buildRatingWidget(
-                                                        0.0,
-                                                      );
-                                                    }
-
-                                                    final rating =
-                                                        ratingSnapshot.data ??
-                                                        0.0;
-                                                    print(
-                                                      '🎯 DISPLAYING RATING: $rating for service: $serviceName',
-                                                    );
-                                                    return _buildRatingWidget(
-                                                      rating,
-                                                    );
-                                                  },
+                                                // Rating with onSnapshot
+                                                ServiceRatingWidget(
+                                                  providerUserId: providerUserId,
+                                                  serviceName: serviceName,
                                                 ),
-
                                                 const SizedBox(height: 12),
 
-                                                // ✅ FIXED SEND REQUEST BUTTON - PASS ROLE
+                                                // Send Request Button
                                                 SizedBox(
                                                   width: double.infinity,
                                                   child: ElevatedButton.icon(
                                                     onPressed: () {
-                                                      // ✅ CHECK IF USER IS LOGGED IN AND ROLE IS LOADED
-                                                      if (_currentUserId ==
-                                                          null) {
-                                                        ScaffoldMessenger.of(
-                                                          context,
-                                                        ).showSnackBar(
+                                                      if (_currentUserId == null) {
+                                                        ScaffoldMessenger.of(context).showSnackBar(
                                                           const SnackBar(
-                                                            content: Text(
-                                                              'Please log in to send a request',
-                                                            ),
-                                                            backgroundColor:
-                                                                Colors.red,
+                                                            content: Text('Please log in to send a request'),
+                                                            backgroundColor: Colors.red,
                                                           ),
                                                         );
                                                         return;
                                                       }
 
-                                                      if (_currentUserRole ==
-                                                          null) {
-                                                        ScaffoldMessenger.of(
-                                                          context,
-                                                        ).showSnackBar(
+                                                      if (_currentUserRole == null) {
+                                                        ScaffoldMessenger.of(context).showSnackBar(
                                                           const SnackBar(
-                                                            content: Text(
-                                                              'Loading user data, please wait...',
-                                                            ),
-                                                            backgroundColor:
-                                                                Colors.orange,
+                                                            content: Text('Loading user data, please wait...'),
+                                                            backgroundColor: Colors.orange,
                                                           ),
                                                         );
                                                         return;
                                                       }
 
-                                                      final serviceId =
-                                                          service.id;
+                                                      final serviceId = service.id;
 
-                                                      print(
-                                                        '🚀 NAVIGATING TO SendOrderCustomer:',
-                                                      );
-                                                      print(
-                                                        '   👤 Customer ID (logged-in user): $_currentUserId',
-                                                      );
-                                                      print(
-                                                        '   🏷️ Service ID: $serviceId',
-                                                      );
-                                                      print(
-                                                        '   👨‍💼 Provider ID (from service): $providerUserId',
-                                                      );
-                                                      print(
-                                                        '   🎭 User Role: $_currentUserRole',
-                                                      );
+                                                      print('🚀 NAVIGATING TO SendOrderCustomer:');
+                                                      print('   👤 Customer ID (logged-in user): $_currentUserId');
+                                                      print('   🏷️ Service ID: $serviceId');
+                                                      print('   👨‍💼 Provider ID (from service): $providerUserId');
+                                                      print('   🎭 User Role: $_currentUserRole');
 
                                                       Navigator.push(
                                                         context,
                                                         MaterialPageRoute(
-                                                          builder:
-                                                              (
-                                                                _,
-                                                              ) => SendOrderCustomer(
-                                                                customerId:
-                                                                    _currentUserId!, // ✅ CUSTOMER ID
-                                                                serviceId:
-                                                                    serviceId, // ✅ SERVICE ID
-                                                                providerId:
-                                                                    providerUserId, // ✅ PROVIDER ID
-                                                                role:
-                                                                    _currentUserRole!, // ✅ PASS USER ROLE
-                                                              ),
+                                                          builder: (_) => SendOrderCustomer(
+                                                            customerId: _currentUserId!,
+                                                            serviceId: serviceId,
+                                                            providerId: providerUserId,
+                                                            role: _currentUserRole!,
+                                                          ),
                                                         ),
                                                       );
                                                     },
-                                                    icon: const Icon(
-                                                      Icons.send,
-                                                      size: 16,
-                                                    ),
-                                                    label: const Text(
-                                                      "Send Request",
-                                                    ),
+                                                    icon: const Icon(Icons.send, size: 16),
+                                                    label: const Text("Send Request"),
                                                     style: ElevatedButton.styleFrom(
-                                                      backgroundColor:
-                                                          Colors.cyan,
-                                                      foregroundColor:
-                                                          Colors.white,
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            vertical: 8,
-                                                          ),
+                                                      backgroundColor: const Color(0xFF00BCD4),
+                                                      foregroundColor: Colors.white,
+                                                      padding: const EdgeInsets.symmetric(vertical: 8),
                                                       shape: RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              8,
-                                                            ),
+                                                        borderRadius: BorderRadius.circular(8),
                                                       ),
                                                     ),
                                                   ),
@@ -1249,7 +1213,7 @@ class _LandingPageState extends State<LandingPage> {
                               },
                             );
                           },
-                        ),
+                        )
                       ],
                     ),
                   ),

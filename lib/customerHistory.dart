@@ -13,35 +13,46 @@ class _CustomerHistoryPageState extends State<CustomerHistoryPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE3F2FD),
+      backgroundColor: const Color(0xFFF0F9FF), // Light blue background from sample
       appBar: AppBar(
         title: const Text(
           'My Orders',
           style: TextStyle(
-            color: Colors.white,
+            color: Color(0xFF1E293B),
             fontWeight: FontWeight.w600,
-            fontSize: 20,
+            fontSize: 18,
           ),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF42A5F5),
+        backgroundColor: Colors.white,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Color(0xFF1E293B)),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('orders')
             .where('customerId', isEqualTo: widget.userId)
-            .where('status', isEqualTo: 'completed')
-            .snapshots(),
+            .snapshots(), // Removed status filter to get all orders
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF22D3EE)),
+              ),
+            );
           }
 
           if (snapshot.hasError) {
             print('Firestore Error: ${snapshot.error}');
-            return Center(child: Text('Error: ${snapshot.error}'));
+            return Center(
+              child: Text(
+                'Error: ${snapshot.error}',
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 14,
+                ),
+              ),
+            );
           }
 
           final allOrders = snapshot.data?.docs ?? [];
@@ -108,7 +119,7 @@ class _CustomerHistoryPageState extends State<CustomerHistoryPage> {
           });
 
           // Print orders to console for debugging
-          print('=== COMPLETED ORDERS BEFORE TODAY ===');
+          print('=== ALL ORDERS BEFORE TODAY ===');
           print('User ID: ${widget.userId}');
           print('Today: ${todayMidnight.toString()}');
           print('Found ${orders.length} orders');
@@ -119,6 +130,7 @@ class _CustomerHistoryPageState extends State<CustomerHistoryPage> {
             print('Order ID: ${orders[i].id}');
             print('Customer ID: ${order['customerId']}');
             print('Status: ${order['status']}');
+            print('Order Type: ${order['orderType']}');
             print('Service Date: ${order['serviceDate']}');
             print('Service: ${order['service']}');
             print('Category: ${order['category']}');
@@ -129,205 +141,331 @@ class _CustomerHistoryPageState extends State<CustomerHistoryPage> {
           }
 
           if (orders.isEmpty) {
-            return const Center(
-              child: Text('No completed orders from previous dates.'),
-            );
+            return _buildEmptyState();
           }
 
           return ListView.separated(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             itemCount: orders.length,
             separatorBuilder: (_, __) => const SizedBox(height: 16),
             itemBuilder: (context, index) {
               final order = orders[index].data() as Map<String, dynamic>;
-
-              return Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                color: Colors.white,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Service title and status
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${order['category']?.toString().toUpperCase() ?? 'SERVICE'} - ${order['service'] ?? 'Unknown'}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 18,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF4CAF50),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Icon(
-                                  Icons.check_circle,
-                                  color: Colors.white,
-                                  size: 16,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  'COMPLETED',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Location
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            Icons.location_on,
-                            color: Color(0xFF42A5F5),
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              order['location']?['address'] ?? 'N/A',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
-                                height: 1.3,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Date and Time
-                      Row(
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.calendar_today,
-                                color: Color(0xFF42A5F5),
-                                size: 18,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                order['serviceDate']?.toString() ?? '',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(width: 20),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.access_time,
-                                color: Color(0xFF42A5F5),
-                                size: 18,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                order['serviceTime'] ?? '',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Category
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.build,
-                            color: Color(0xFF42A5F5),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            order['category'] ?? 'N/A',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Price
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.attach_money,
-                            color: Color(0xFF42A5F5),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Rs. ${(order['applications'] != null && order['applications'].isNotEmpty) ? order['applications'][0]['price'] ?? 'N/A' : 'N/A'}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Applications count
-                      Text(
-                        'Applications: ${order['applications']?.length ?? 0}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
+              return _buildOrderCard(order);
             },
           );
         },
       ),
     );
+  }
+
+  Widget _buildOrderCard(Map<String, dynamic> order) {
+    // Get status and determine color
+    final status = order['status']?.toString().toLowerCase() ?? 'pending';
+    Color statusColor;
+    IconData statusIcon;
+
+    switch (status) {
+      case 'completed':
+        statusColor = const Color(0xFF10B981); // Green
+        statusIcon = Icons.check_circle;
+        break;
+      case 'cancelled':
+        statusColor = const Color(0xFFEF4444); // Red
+        statusIcon = Icons.cancel;
+        break;
+      case 'in_progress':
+        statusColor = const Color(0xFFF59E0B); // Orange
+        statusIcon = Icons.hourglass_empty;
+        break;
+      default:
+        statusColor = const Color(0xFF64748B); // Gray
+        statusIcon = Icons.pending;
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            spreadRadius: 0,
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Service title and status
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    '${order['category']?.toString().toUpperCase() ?? 'SERVICE'} - ${order['service'] ?? 'Unknown'}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        statusIcon,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        status.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // Location
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.location_on,
+                  color: Color(0xFF22D3EE),
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    order['location']?['address'] ?? 'N/A',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF64748B),
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Date and Time
+            Row(
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today,
+                      color: Color(0xFF22D3EE),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _formatDate(order['serviceDate']),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 20),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.access_time,
+                      color: Color(0xFF22D3EE),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      order['serviceTime'] ?? 'N/A',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Order Type (if available)
+            if (order['orderType'] != null) ...[
+              Row(
+                children: [
+                  const Icon(
+                    Icons.category,
+                    color: Color(0xFF22D3EE),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Type: ${order['orderType']}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Category
+            Row(
+              children: [
+                const Icon(
+                  Icons.build,
+                  color: Color(0xFF22D3EE),
+                  size: 18,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  order['category'] ?? 'N/A',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Price
+            Row(
+              children: [
+                const Icon(
+                  Icons.attach_money,
+                  color: Color(0xFF22D3EE),
+                  size: 18,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Rs. ${(order['applications'] != null && order['applications'].isNotEmpty) ? order['applications'][0]['price'] ?? 'N/A' : 'N/A'}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Applications count
+            Row(
+              children: [
+                const Icon(
+                  Icons.people,
+                  color: Color(0xFF22D3EE),
+                  size: 18,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Applications: ${order['applications']?.length ?? 0}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(40),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF22D3EE).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Icon(
+              Icons.history,
+              size: 48,
+              color: Color(0xFF22D3EE),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'No Past Orders',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'You don\'t have any orders from previous dates.\nYour completed orders will appear here.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: Color(0xFF64748B),
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(dynamic date) {
+    if (date == null) return 'N/A';
+
+    DateTime? dateTime;
+    if (date is Timestamp) {
+      dateTime = date.toDate();
+    } else if (date is String) {
+      try {
+        dateTime = DateTime.parse(date);
+      } catch (e) {
+        return date;
+      }
+    }
+
+    if (dateTime != null) {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    }
+
+    return date.toString();
   }
 }

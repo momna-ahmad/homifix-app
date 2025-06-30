@@ -70,6 +70,25 @@ class _CustomerOrderPageState extends State<CustomerOrderPage>
       return 'Provider';
     }
   }
+  // Helper method to check if service date has passed
+  bool _hasServiceDatePassed(Map<String, dynamic> data) {
+    final String? serviceDateStr = data['serviceDate'] as String?;
+    if (serviceDateStr == null || serviceDateStr.isEmpty) {
+      return false; // If no date specified, don't filter out
+    }
+
+    try {
+      // Parse the service date (assuming format is DD/MM/YYYY or similar)
+      final DateTime serviceDate = DateFormat('dd/MM/yyyy').parse(serviceDateStr);
+      final DateTime today = DateTime.now();
+
+      // Check if service date is before today (ignoring time)
+      return serviceDate.isBefore(DateTime(today.year, today.month, today.day));
+    } catch (e) {
+      print('Error parsing service date: $serviceDateStr, Error: $e');
+      return false; // If parsing fails, don't filter out
+    }
+  }
 
   // Optimized modal showing
   void _showAddOrderModal(BuildContext context, String userId) {
@@ -418,10 +437,22 @@ class _CustomerOrderPageState extends State<CustomerOrderPage>
         }
 
         // Filter and sort applied orders on client side
+// Filter and sort applied orders on client side
         final appliedOrders = snapshot.data!.docs.where((order) {
           final data = order.data() as Map<String, dynamic>;
           final orderType = data['orderType'] as String? ?? '';
           final providerId = data['providerId'] as String?;
+          final status = data['status'] as String? ?? '';
+
+          // Filter out cancelled orders
+          if (status.toLowerCase() == 'cancelled') {
+            return false;
+          }
+
+          // Filter out orders with passed dates
+          if (_hasServiceDatePassed(data)) {
+            return false;
+          }
 
           return orderType == 'customer_application' ||
               (orderType != 'customer_post' && providerId != null && providerId.isNotEmpty);
@@ -490,7 +521,23 @@ class _CustomerOrderPageState extends State<CustomerOrderPage>
           return _buildLoadingWidget('Loading your job posts...');
         }
 
-        final orders = snapshot.data!.docs.toList();
+        // Filter out cancelled orders and orders with passed dates
+        final orders = snapshot.data!.docs.where((order) {
+          final data = order.data() as Map<String, dynamic>;
+          final status = data['status'] as String? ?? '';
+
+          // Filter out cancelled orders
+          if (status.toLowerCase() == 'cancelled') {
+            return false;
+          }
+
+          // Filter out orders with passed dates
+          if (_hasServiceDatePassed(data)) {
+            return false;
+          }
+
+          return true;
+        }).toList();
 
         // Sort by createdAt on client side to avoid index issues
         orders.sort((a, b) {

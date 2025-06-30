@@ -58,7 +58,7 @@ dependencies:
 
   # App Icon
   flutter_launcher_icons: ^0.14.4
-
+  flutter_riverpod: ^2.6.1
 
 dev_dependencies:
   flutter_test:

@@ -8,11 +8,12 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'homeNavPage.dart';
 import 'CustomerOrderPage.dart';
 import 'splashScreen.dart';
-import 'notification_service.dart'; // Import our notification service
+// ❌ Removed: import 'test_riverpod.dart';
 
 // Global plugin instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -26,13 +27,9 @@ const AndroidNotificationChannel channel = AndroidNotificationChannel(
 );
 
 // FCM Background handler
-@pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print('📱 Handling a background message: ${message.messageId}');
-  print('📱 Background Title: ${message.notification?.title}');
-  print('📱 Background Body: ${message.notification?.body}');
-  print('📱 Background Data: ${message.data}');
+  print('Handling a background message: ${message.messageId}');
 }
 
 // Daily Reminder (one-time, 2 minutes from now)
@@ -86,67 +83,143 @@ Future<void> showLocalNotification(String title, String body) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load .env file
-  await dotenv.load(fileName: "assets/.env");
+  try {
+    // Load .env file
+    await dotenv.load(fileName: "assets/.env");
 
-  // Initialize Mobile Ads
-  MobileAds.instance.initialize();
+    // Initialize Mobile Ads
+    MobileAds.instance.initialize();
 
-  // Initialize timezone
-  tz.initializeTimeZones();
-  tz.setLocalLocation(tz.getLocation('Asia/Karachi'));
+    // Initialize timezone
+    tz.initializeTimeZones();
+    tz.setLocalLocation(tz.getLocation('Asia/Karachi'));
 
-  // Firebase Initialization
-  if (kIsWeb) {
-    await Firebase.initializeApp(
-      options: FirebaseOptions(
-        apiKey: dotenv.env['API_KEY'] ?? '',
-        authDomain: dotenv.env['AUTH_DOMAIN'] ?? '',
-        projectId: dotenv.env['PROJECT_ID'] ?? '',
-        storageBucket: dotenv.env['STORAGE_BUCKET'] ?? '',
-        messagingSenderId: dotenv.env['MESSAGING_SENDER_ID'] ?? '',
-        appId: dotenv.env['APP_ID'] ?? '',
-        measurementId: dotenv.env['MEASUREMENT_ID'] ?? '',
-      ),
-    );
-  } else {
-    await Firebase.initializeApp();
+    // Firebase Initialization
+    if (kIsWeb) {
+      await Firebase.initializeApp(
+        options: FirebaseOptions(
+          apiKey: dotenv.env['API_KEY'] ?? '',
+          authDomain: dotenv.env['AUTH_DOMAIN'] ?? '',
+          projectId: dotenv.env['PROJECT_ID'] ?? '',
+          storageBucket: dotenv.env['STORAGE_BUCKET'] ?? '',
+          messagingSenderId: dotenv.env['MESSAGING_SENDER_ID'] ?? '',
+          appId: dotenv.env['APP_ID'] ?? '',
+          measurementId: dotenv.env['MEASUREMENT_ID'] ?? '',
+        ),
+      );
+    } else {
+      await Firebase.initializeApp();
 
-    // Register background handler BEFORE initializing notification service
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      // Initialize local notifications
+      const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+      final InitializationSettings initSettings = InitializationSettings(android: androidInit);
+      await flutterLocalNotificationsPlugin.initialize(initSettings);
 
-    // Initialize our comprehensive notification service
-    await NotificationService.initialize();
+      // Create notification channel
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(channel);
 
-    // Initialize local notifications (keeping your existing setup)
-    const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    final InitializationSettings initSettings = InitializationSettings(android: androidInit);
-    await flutterLocalNotificationsPlugin.initialize(initSettings);
+      // Firebase Messaging setup
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+      String? token = await messaging.getToken();
+      print('📲 FCM Token: $token');
 
-    // Create notification channel (keeping your existing setup)
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+      if (token != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('fcm_token', token);
+        print('✅ Token saved in SharedPreferences');
+      }
 
-    // Basic FCM setup (your existing code)
-    FirebaseMessaging messaging = FirebaseMessaging.instance;
-    String? token = await messaging.getToken();
-    print('📲 FCM Token: $token');
+      NotificationSettings settings = await messaging.requestPermission();
+      print('🔔 Notification permission: ${settings.authorizationStatus}');
 
-    if (token != null) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('fcm_token', token);
-      print('✅ Token saved in SharedPreferences');
+      // Register background handler
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     }
 
-    NotificationSettings settings = await messaging.requestPermission();
-    print('🔔 Notification permission: ${settings.authorizationStatus}');
+    // Schedule test reminder
+    await scheduleDailyReminder();
+
+    print('🚀 Starting app with ProviderScope...');
+
+    // ✅ WRAP YOUR APP WITH PROVIDERSCHOPE
+    runApp(
+      ProviderScope(
+        observers: [
+          // ✅ Add observer to debug Riverpod
+          if (kDebugMode) RiverpodLogger(),
+        ],
+        child: const MyApp(),
+      ),
+    );
+  } catch (e, stackTrace) {
+    print('❌ Error in main(): $e');
+    print('Stack trace: $stackTrace');
+
+    // Fallback app without complex initialization
+    runApp(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error, size: 64, color: Colors.red),
+                  SizedBox(height: 16),
+                  Text('Initialization Error'),
+                  SizedBox(height: 8),
+                  Text(e.toString()),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ✅ Riverpod Logger for debugging
+class RiverpodLogger extends ProviderObserver {
+  @override
+  void didAddProvider(
+      ProviderBase provider,
+      Object? value,
+      ProviderContainer container,
+      ) {
+    print('🔄 Provider added: ${provider.name ?? provider.runtimeType}');
   }
 
-  // Schedule test reminder (keeping your existing functionality)
-  await scheduleDailyReminder();
+  @override
+  void didDisposeProvider(
+      ProviderBase provider,
+      ProviderContainer container,
+      ) {
+    print('🗑️ Provider disposed: ${provider.name ?? provider.runtimeType}');
+  }
 
-  runApp(const MyApp());
+  @override
+  void didUpdateProvider(
+      ProviderBase provider,
+      Object? previousValue,
+      Object? newValue,
+      ProviderContainer container,
+      ) {
+    print('🔄 Provider updated: ${provider.name ?? provider.runtimeType}');
+  }
+
+  @override
+  void providerDidFail(
+      ProviderBase provider,
+      Object error,
+      StackTrace stackTrace,
+      ProviderContainer container,
+      ) {
+    print('❌ Provider failed: ${provider.name ?? provider.runtimeType}');
+    print('Error: $error');
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -154,11 +227,13 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print('🏗️ Building MyApp...');
+
     return MaterialApp(
       title: 'Home Services App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        scaffoldBackgroundColor: Color(0xFFF0F9FF), // Light blue background
+        scaffoldBackgroundColor: Color(0xFFF0F9FF),
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
@@ -169,7 +244,12 @@ class MyApp extends StatelessWidget {
           unselectedItemColor: Colors.grey,
         ),
       ),
+      // ✅ Always use SplashScreen as home
       home: SplashScreen(),
+      // ✅ Removed test route
+      routes: {
+        '/splash': (context) => SplashScreen(),
+      },
     );
   }
 }
