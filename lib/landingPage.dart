@@ -767,7 +767,7 @@ class _LandingPageState extends State<LandingPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "Find the best cleaning services in your city",
+                          "",
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey[600],
@@ -794,7 +794,7 @@ class _LandingPageState extends State<LandingPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text(
-                                      "25% OFF",
+                                      "Find the best cleaning services in your city",
                                       style: TextStyle(
                                         fontSize: 28,
                                         fontWeight: FontWeight.bold,
@@ -802,7 +802,7 @@ class _LandingPageState extends State<LandingPage> {
                                       ),
                                     ),
                                     const Text(
-                                      "On home services",
+                                      "On Home Services",
                                       style: TextStyle(
                                         fontSize: 16,
                                         color: Colors.white70,
@@ -977,18 +977,14 @@ class _LandingPageState extends State<LandingPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
+                        // Replace the existing StreamBuilder section with this corrected version
                         StreamBuilder<QuerySnapshot>(
                           stream: selectedCategory != null
                               ? FirebaseFirestore.instance
                               .collection('services')
-                              .where(
-                            'category',
-                            isEqualTo: selectedCategory,
-                          )
+                              .where('category', isEqualTo: selectedCategory)
                               .snapshots()
-                              : FirebaseFirestore.instance
-                              .collection('services')
-                              .snapshots(),
+                              : FirebaseFirestore.instance.collection('services').snapshots(),
                           builder: (context, snapshot) {
                             if (!snapshot.hasData) {
                               return const Center(
@@ -999,12 +995,27 @@ class _LandingPageState extends State<LandingPage> {
                             }
                             final services = snapshot.data!.docs;
 
+                            // CORRECTED FILTERING LOGIC - Remove case sensitivity issues
                             final filteredServices = services.where((service) {
                               final data = service.data() as Map<String, dynamic>;
-                              final serviceName = (data['service'] ?? '')
-                                  .toString()
-                                  .toLowerCase();
-                              return serviceName.contains(searchQuery);
+
+                              // Get service name and handle null/empty cases
+                              final serviceName = (data['service'] ?? '').toString();
+                              final category = (data['category'] ?? '').toString();
+                              final providerName = (data['providerName'] ?? '').toString();
+                              final description = (data['description'] ?? '').toString();
+
+                              // If there's a search query, filter by it (case-insensitive)
+                              if (searchQuery.isNotEmpty) {
+                                final query = searchQuery.toLowerCase();
+                                return serviceName.toLowerCase().contains(query) ||
+                                    category.toLowerCase().contains(query) ||
+                                    providerName.toLowerCase().contains(query) ||
+                                    description.toLowerCase().contains(query);
+                              }
+
+                              // If no search query, show all services (category filter is already applied in the stream)
+                              return true;
                             }).toList();
 
                             if (filteredServices.isEmpty) {
@@ -1031,13 +1042,10 @@ class _LandingPageState extends State<LandingPage> {
                                 final data = service.data() as Map<String, dynamic>;
                                 final serviceName = data['service'] ?? '';
                                 final price = data['price'] ?? '';
-                                final imageUrls = List<String>.from(
-                                  data['imageUrls'] ?? [],
-                                );
+                                final imageUrls = List<String>.from(data['imageUrls'] ?? []);
                                 final category = data['category'] ?? '';
                                 final providerUserId = data['userId'] ?? '';
-                                final providerName =
-                                    data['providerName'] ?? 'Professional';
+                                final providerName = data['providerName'] ?? 'Professional';
 
                                 print('🏷️ Processing service: $serviceName');
                                 print('👤 Service Provider ID: $providerUserId');
@@ -1073,16 +1081,16 @@ class _LandingPageState extends State<LandingPage> {
                                             imageUrls: imageUrls,
                                             serviceId: service.id,
                                           ),
-
                                           const SizedBox(width: 16),
-
                                           // Service Details
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Text(
+                                                // CORRECTED: Use RichText for highlighting search terms
+                                                searchQuery.isNotEmpty
+                                                    ? highlightText(serviceName, searchQuery)
+                                                    : Text(
                                                   serviceName,
                                                   style: const TextStyle(
                                                     fontSize: 18,
@@ -1094,19 +1102,17 @@ class _LandingPageState extends State<LandingPage> {
 
                                                 // Category chip
                                                 _buildCategoryChip(category),
-
                                                 const SizedBox(height: 6),
 
                                                 // Service description/details
                                                 if (data['description'] != null &&
-                                                    data['description']
-                                                        .toString()
-                                                        .isNotEmpty)
+                                                    data['description'].toString().isNotEmpty)
                                                   Column(
-                                                    crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
                                                     children: [
-                                                      Text(
+                                                      searchQuery.isNotEmpty
+                                                          ? highlightText(data['description'], searchQuery)
+                                                          : Text(
                                                         data['description'],
                                                         style: TextStyle(
                                                           fontSize: 14,
@@ -1144,7 +1150,6 @@ class _LandingPageState extends State<LandingPage> {
                                                   providerUserId: providerUserId,
                                                   serviceName: serviceName,
                                                 ),
-
                                                 const SizedBox(height: 12),
 
                                                 // Send Request Button
@@ -1153,12 +1158,9 @@ class _LandingPageState extends State<LandingPage> {
                                                   child: ElevatedButton.icon(
                                                     onPressed: () {
                                                       if (_currentUserId == null) {
-                                                        ScaffoldMessenger.of(context)
-                                                            .showSnackBar(
+                                                        ScaffoldMessenger.of(context).showSnackBar(
                                                           const SnackBar(
-                                                            content: Text(
-                                                              'Please log in to send a request',
-                                                            ),
+                                                            content: Text('Please log in to send a request'),
                                                             backgroundColor: Colors.red,
                                                           ),
                                                         );
@@ -1166,12 +1168,9 @@ class _LandingPageState extends State<LandingPage> {
                                                       }
 
                                                       if (_currentUserRole == null) {
-                                                        ScaffoldMessenger.of(context)
-                                                            .showSnackBar(
+                                                        ScaffoldMessenger.of(context).showSnackBar(
                                                           const SnackBar(
-                                                            content: Text(
-                                                              'Loading user data, please wait...',
-                                                            ),
+                                                            content: Text('Loading user data, please wait...'),
                                                             backgroundColor: Colors.orange,
                                                           ),
                                                         );
@@ -1180,49 +1179,32 @@ class _LandingPageState extends State<LandingPage> {
 
                                                       final serviceId = service.id;
 
-                                                      print(
-                                                        '🚀 NAVIGATING TO SendOrderCustomer:',
-                                                      );
-                                                      print(
-                                                        '   👤 Customer ID (logged-in user): $_currentUserId',
-                                                      );
-                                                      print(
-                                                        '   🏷️ Service ID: $serviceId',
-                                                      );
-                                                      print(
-                                                        '   👨‍💼 Provider ID (from service): $providerUserId',
-                                                      );
-                                                      print(
-                                                        '   🎭 User Role: $_currentUserRole',
-                                                      );
+                                                      print('🚀 NAVIGATING TO SendOrderCustomer:');
+                                                      print('   👤 Customer ID (logged-in user): $_currentUserId');
+                                                      print('   🏷️ Service ID: $serviceId');
+                                                      print('   👨‍💼 Provider ID (from service): $providerUserId');
+                                                      print('   🎭 User Role: $_currentUserRole');
 
                                                       Navigator.push(
                                                         context,
                                                         MaterialPageRoute(
-                                                          builder: (_) =>
-                                                              SendOrderCustomer(
-                                                                customerId: _currentUserId!,
-                                                                serviceId: serviceId,
-                                                                providerId: providerUserId,
-                                                                role: _currentUserRole!,
-                                                              ),
+                                                          builder: (_) => SendOrderCustomer(
+                                                            customerId: _currentUserId!,
+                                                            serviceId: serviceId,
+                                                            providerId: providerUserId,
+                                                            role: _currentUserRole!,
+                                                          ),
                                                         ),
                                                       );
                                                     },
-                                                    icon: const Icon(
-                                                      Icons.send,
-                                                      size: 16,
-                                                    ),
+                                                    icon: const Icon(Icons.send, size: 16),
                                                     label: const Text("Send Request"),
                                                     style: ElevatedButton.styleFrom(
                                                       backgroundColor: const Color(0xFF00BCD4),
                                                       foregroundColor: Colors.white,
-                                                      padding: const EdgeInsets.symmetric(
-                                                        vertical: 8,
-                                                      ),
+                                                      padding: const EdgeInsets.symmetric(vertical: 8),
                                                       shape: RoundedRectangleBorder(
-                                                        borderRadius:
-                                                        BorderRadius.circular(8),
+                                                        borderRadius: BorderRadius.circular(8),
                                                       ),
                                                     ),
                                                   ),
@@ -1238,7 +1220,7 @@ class _LandingPageState extends State<LandingPage> {
                               },
                             );
                           },
-                        ),
+                        )
                       ],
                     ),
                   ),
