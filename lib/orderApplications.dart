@@ -105,7 +105,7 @@ class LocationState {
 class LocationStateNotifier extends StateNotifier<LocationState> {
   LocationStateNotifier() : super(LocationState());
 
-  // Get address from coordinates using LocationIQ API
+  // ✅ Get address from coordinates using LocationIQ API
   Future<String> _getAddressFromLatLng(double lat, double lng) async {
     const apiKey = 'pk.c6205b1882bfb7c832c4fea13d2fc5b4';
     final url = Uri.parse(
@@ -113,26 +113,33 @@ class LocationStateNotifier extends StateNotifier<LocationState> {
     );
 
     try {
-      final response = await http.get(url);
+      print('🌐 RIVERPOD: Making LocationIQ API request for coordinates: $lat, $lng');
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['display_name'] ?? 'Unknown location';
+        final address = data['display_name'] ?? 'Unknown location';
+        print('✅ RIVERPOD: LocationIQ API response: $address');
+        return address;
       } else {
+        print('❌ RIVERPOD: LocationIQ API error: ${response.statusCode}');
         throw Exception('Failed to get address: ${response.statusCode}');
       }
     } catch (e) {
-      print('Error getting address: $e');
+      print('❌ RIVERPOD: Error getting address from LocationIQ: $e');
       return 'Location: $lat, $lng';
     }
   }
 
-  // Get current location
+  // ✅ Improved location acquisition with multiple fallback strategies
   Future<void> getCurrentLocation() async {
     try {
+      print('🔄 RIVERPOD: Starting improved location acquisition process...');
+
       // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        throw Exception('Location services are disabled. Please enable them.');
+        throw Exception('Location services are disabled. Please enable location services in your device settings.');
       }
 
       // Check location permissions
@@ -140,28 +147,73 @@ class LocationStateNotifier extends StateNotifier<LocationState> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          throw Exception('Location permissions are denied.');
+          throw Exception('Location permissions are denied. Please allow location access.');
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
         throw Exception(
-          'Location permissions are permanently denied. Please enable them in settings.',
+          'Location permissions are permanently denied. Please enable them in device settings.',
         );
       }
 
-      // Show loading indicator for location only
+      // Show loading indicator
       state = state.copyWith(isGettingLocation: true);
 
-      // Get current position
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
-      );
+      Position? position;
+
+      try {
+        print('📍 RIVERPOD: Attempting high accuracy location...');
+        // First attempt: High accuracy with shorter timeout
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        );
+      } catch (e) {
+        print('⚠️ RIVERPOD: High accuracy failed, trying medium accuracy: $e');
+
+        try {
+          // Second attempt: Medium accuracy with longer timeout
+          position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.medium,
+            timeLimit: const Duration(seconds: 15),
+          );
+        } catch (e) {
+          print('⚠️ RIVERPOD: Medium accuracy failed, trying low accuracy: $e');
+
+          try {
+            // Third attempt: Low accuracy with even longer timeout
+            position = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.low,
+              timeLimit: const Duration(seconds: 20),
+            );
+          } catch (e) {
+            print('⚠️ RIVERPOD: Low accuracy failed, trying last known position: $e');
+
+            // Final fallback: Get last known position
+            position = await Geolocator.getLastKnownPosition();
+            if (position == null) {
+              throw Exception('Unable to get location. Please ensure GPS is enabled and try again in an open area.');
+            }
+            print('✅ RIVERPOD: Using last known position as fallback');
+          }
+        }
+      }
 
       final lat = position.latitude;
       final lng = position.longitude;
-      final address = await _getAddressFromLatLng(lat, lng);
+
+      print('✅ RIVERPOD: Position obtained: $lat, $lng');
+      print('🌐 RIVERPOD: Getting address from LocationIQ API...');
+
+      // Get address using LocationIQ API with timeout
+      String address;
+      try {
+        address = await _getAddressFromLatLng(lat, lng);
+      } catch (e) {
+        print('⚠️ RIVERPOD: Address lookup failed, using coordinates: $e');
+        address = 'Location: ${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
+      }
 
       state = state.copyWith(
         currentLat: lat,
@@ -171,7 +223,8 @@ class LocationStateNotifier extends StateNotifier<LocationState> {
         clearSelectedLocation: true, // Clear dropdown selection
       );
 
-      print('✅ RIVERPOD: Current location obtained: $address');
+      print('✅ RIVERPOD: Current location obtained successfully: $address');
+      print('📊 RIVERPOD: Location data - Lat: $lat, Lng: $lng');
     } catch (e) {
       state = state.copyWith(isGettingLocation: false);
       print('❌ RIVERPOD: Error getting location: $e');
@@ -230,6 +283,7 @@ class ApplicationActions {
       print('   👨‍💼 Professional ID: $professionalId');
       print('   👤 Customer ID: $customerId');
       print('   📍 Location: ${locationState.currentLocation}');
+      print('   🌐 Coordinates: ${locationState.currentLat}, ${locationState.currentLng}');
 
       final orderRef = FirebaseFirestore.instance.collection('orders').doc(orderId);
 
@@ -255,7 +309,7 @@ class ApplicationActions {
         final updatedApplication = {...applications[applicationIndex], 'status': 'accepted'};
         applications[applicationIndex] = updatedApplication;
 
-        // Update order with client location (customer's shared location)
+        // ✅ Update order with client location (customer's shared location)
         transaction.update(orderRef, {
           'applications': applications,
           'status': 'assigned',
@@ -267,7 +321,7 @@ class ApplicationActions {
           },
         });
 
-        // Add to professional's orders array with location as array format
+        // ✅ Add to professional's orders array with location as Map format
         final professionalDocRef = FirebaseFirestore.instance.collection('users').doc(professionalId);
         transaction.update(professionalDocRef, {
           'orders': FieldValue.arrayUnion([
@@ -292,7 +346,7 @@ class ApplicationActions {
       ref.read(locationStateProvider.notifier).clearLocation();
 
       if (context.mounted) {
-        _showSnackBar(context, 'Application accepted and order assigned!', Colors.green);
+        _showSnackBar(context, 'Application accepted successfully!', Colors.green);
         Navigator.pop(context);
       }
 
@@ -322,7 +376,7 @@ class OrderApplications extends ConsumerWidget {
     final orderAsync = ref.watch(orderApplicationsProvider(orderId));
 
     return Scaffold(
-      backgroundColor: const Color(0xFFE3F2FD), // ✅ Updated background color
+      backgroundColor: const Color(0xFFE3F2FD),
       appBar: _buildAppBar(),
       body: orderAsync.when(
         data: (orderSnapshot) {
@@ -374,7 +428,7 @@ class OrderApplications extends ConsumerWidget {
       String customerId,
       ) {
     return Container(
-      color: const Color(0xFFE3F2FD), // ✅ Updated background color
+      color: const Color(0xFFE3F2FD),
       child: Column(
         children: [
           // Order Info Header
@@ -927,7 +981,7 @@ class _LocationSelectionDialog extends ConsumerWidget {
           if (locationState.currentLocation.isNotEmpty)
             _buildLocationDisplay(locationState),
 
-          // Get Current Location Button
+          // ✅ Get Current Location Button with improved error handling
           ElevatedButton.icon(
             onPressed: locationState.isGettingLocation
                 ? null
@@ -954,6 +1008,32 @@ class _LocationSelectionDialog extends ConsumerWidget {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ✅ Location Tips
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue.shade600, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'For better location accuracy, ensure GPS is enabled and you\'re in an open area.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 20),
@@ -1047,10 +1127,8 @@ class _LocationSelectionDialog extends ConsumerWidget {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: DropdownButtonFormField<String>(
-              value: locationState.selectedPreviousLocation != null
-                  ? locationState.selectedPreviousLocation!['address']
-                  : null,
+            child: DropdownButtonFormField<Map<String, dynamic>>(
+              value: locationState.selectedPreviousLocation,
               decoration: InputDecoration(
                 hintText: 'Choose a previous location',
                 border: OutlineInputBorder(
@@ -1066,17 +1144,13 @@ class _LocationSelectionDialog extends ConsumerWidget {
                   vertical: 8,
                 ),
               ),
-              items: previousLocations.asMap().entries.map((entry) {
-                int index = entry.key;
-                Map<String, dynamic> location = entry.value;
-                String address = location['address'];
-
-                return DropdownMenuItem<String>(
-                  value: address,
+              items: previousLocations.map((location) {
+                return DropdownMenuItem<Map<String, dynamic>>(
+                  value: location,
                   child: SizedBox(
                     width: double.infinity,
                     child: Text(
-                      address,
+                      location['address'] ?? 'Unknown location',
                       style: const TextStyle(fontSize: 14),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 2,
@@ -1084,13 +1158,8 @@ class _LocationSelectionDialog extends ConsumerWidget {
                   ),
                 );
               }).toList(),
-              onChanged: (String? selectedAddress) {
-                if (selectedAddress != null) {
-                  // Find the location object that matches the selected address
-                  final selectedLocation = previousLocations.firstWhere(
-                        (location) => location['address'] == selectedAddress,
-                  );
-
+              onChanged: (Map<String, dynamic>? selectedLocation) {
+                if (selectedLocation != null) {
                   ref.read(locationStateProvider.notifier).selectPreviousLocation(selectedLocation);
                   _showSnackBar(context, 'Previous location selected!', const Color(0xFF00BCD4));
                 }
@@ -1234,14 +1303,30 @@ class _LocationSelectionDialog extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        _showSnackBar(context, 'Failed to get location: $e', Colors.red);
+        String errorMessage = 'Failed to get location: ';
+
+        if (e.toString().contains('TimeoutException')) {
+          errorMessage += 'Location request timed out. Please ensure GPS is enabled and try again in an open area.';
+        } else if (e.toString().contains('Location services are disabled')) {
+          errorMessage += 'Please enable location services in your device settings.';
+        } else if (e.toString().contains('Location permissions')) {
+          errorMessage += 'Please allow location access for this app.';
+        } else {
+          errorMessage += e.toString();
+        }
+
+        _showSnackBar(context, errorMessage, Colors.red);
       }
     }
   }
 
   void _showSnackBar(BuildContext context, String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: color),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        duration: const Duration(seconds: 4),
+      ),
     );
   }
 }

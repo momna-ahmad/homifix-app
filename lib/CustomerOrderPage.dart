@@ -438,6 +438,7 @@ class _CustomerOrderPageState extends State<CustomerOrderPage>
 
         // Filter and sort applied orders on client side
 // Filter and sort applied orders on client side
+        // Filter and sort applied orders on client side
         final appliedOrders = snapshot.data!.docs.where((order) {
           final data = order.data() as Map<String, dynamic>;
           final orderType = data['orderType'] as String? ?? '';
@@ -455,9 +456,9 @@ class _CustomerOrderPageState extends State<CustomerOrderPage>
           }
 
           return orderType == 'customer_application' ||
+              orderType == 'customer_request' ||
               (orderType != 'customer_post' && providerId != null && providerId.isNotEmpty);
         }).toList();
-
         // Sort by createdAt on client side
         appliedOrders.sort((a, b) {
           final aData = a.data() as Map<String, dynamic>;

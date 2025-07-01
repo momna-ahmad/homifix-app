@@ -127,6 +127,7 @@ class ProfileActions {
       await orderRef.update({
         'selectedWorkerId': null,
         'status': 'pending',
+        'orderType': 'customer_post',
         'applications': currentApplications, // Keep other applications, remove only cancelled worker
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -1066,142 +1067,201 @@ class _CustomerProfileState extends ConsumerState<CustomerProfile>
                         itemBuilder: (context, index) {
                           final notification = notifications[index];
                           final orderId = notification['id'];
-                          final serviceName = notification['serviceName'] ?? 'Unknown Service';
-                          final workerName = notification['workerName'] ?? 'Unknown Worker';
+                          final providerId = notification['selectedWorkerId'];
                           final cancelledAt = notification['cancelledAt'];
 
-                          return Container(
-                            margin: EdgeInsets.only(bottom: 12),
-                            padding: EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.red[50],
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.red[200]!),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
+                          // Return FutureBuilder to fetch additional data
+                          return FutureBuilder<Map<String, String>>(
+                            future: _fetchNotificationData(orderId, providerId),
+                            builder: (context, snapshot) {
+                              final serviceName = snapshot.data?['serviceName'] ?? 'Loading...';
+                              final providerName = snapshot.data?['providerName'] ?? 'Loading...';
+                              final isLoading = !snapshot.hasData;
+
+                              return Container(
+                                margin: EdgeInsets.only(bottom: 12),
+                                padding: EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.red[50],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.red[200]!),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Icon(
-                                      Icons.cancel_outlined,
-                                      color: Colors.red[600],
-                                      size: 24,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Order Cancelled',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.red[800],
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.cancel_outlined,
+                                          color: Colors.red[600],
+                                          size: 24,
                                         ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-
-                                SizedBox(height: 8),
-
-                                Text(
-                                  'Service: $serviceName',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[700],
-                                  ),
-                                ),
-
-                                Text(
-                                  'Worker: $workerName',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[700],
-                                  ),
-                                ),
-
-                                if (cancelledAt != null)
-                                  Text(
-                                    'Cancelled: ${_formatDate(cancelledAt)}',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-
-                                SizedBox(height: 12),
-
-                                // Action Buttons
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton(
-                                        onPressed: () {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('Order cancellation confirmed'),
-                                              backgroundColor: Colors.red[600],
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Order Cancelled',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.red[800],
                                             ),
-                                          );
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.red[600],
-                                          foregroundColor: Colors.white,
-                                          elevation: 0,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(8),
                                           ),
                                         ),
-                                        child: Text(
-                                          'Cancel Order',
-                                          style: TextStyle(fontSize: 13),
-                                        ),
-                                      ),
+                                      ],
                                     ),
 
-                                    SizedBox(width: 8),
+                                    SizedBox(height: 8),
 
-                                    Expanded(
-                                      child: ElevatedButton(
-                                        onPressed: () async {
-                                          try {
-                                            await ref.read(profileActionsProvider)
-                                                .receiveApplications(orderId);
-
-                                            Navigator.pop(context);
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text('Order restored to pending status'),
-                                                backgroundColor: Colors.green[600],
-                                              ),
-                                            );
-                                          } catch (e) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text('Failed to restore order'),
-                                                backgroundColor: Colors.red[600],
-                                              ),
-                                            );
-                                          }
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.blue[600],
-                                          foregroundColor: Colors.white,
-                                          elevation: 0,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(8),
+                                    // Service Name
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'Service: ',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey[700],
+                                            fontWeight: FontWeight.w500,
                                           ),
                                         ),
-                                        child: Text(
-                                          'Receive Applications',
-                                          style: TextStyle(fontSize: 13),
+                                        if (isLoading)
+                                          SizedBox(
+                                            width: 12,
+                                            height: 12,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 1.5,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[500]!),
+                                            ),
+                                          )
+                                        else
+                                          Expanded(
+                                            child: Text(
+                                              serviceName,
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.grey[700],
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+
+                                    // Provider Name
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'Provider: ',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey[700],
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        if (isLoading)
+                                          SizedBox(
+                                            width: 12,
+                                            height: 12,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 1.5,
+                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[500]!),
+                                            ),
+                                          )
+                                        else
+                                          Expanded(
+                                            child: Text(
+                                              providerName,
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.grey[700],
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+
+                                    if (cancelledAt != null)
+                                      Text(
+                                        'Cancelled: ${_formatDate(cancelledAt)}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.grey[600],
                                         ),
                                       ),
+
+                                    SizedBox(height: 12),
+
+                                    // Action Buttons
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: ElevatedButton(
+                                            onPressed: () {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                SnackBar(
+                                                  content: Text('Order cancellation confirmed'),
+                                                  backgroundColor: Colors.red[600],
+                                                ),
+                                              );
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.red[600],
+                                              foregroundColor: Colors.white,
+                                              elevation: 0,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              'Cancel Order',
+                                              style: TextStyle(fontSize: 13),
+                                            ),
+                                          ),
+                                        ),
+
+                                        SizedBox(width: 8),
+
+                                        Expanded(
+                                          child: ElevatedButton(
+                                            onPressed: () async {
+                                              try {
+                                                await ref.read(profileActionsProvider)
+                                                    .receiveApplications(orderId);
+
+                                                Navigator.pop(context);
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text('Order restored to pending status'),
+                                                    backgroundColor: Colors.green[600],
+                                                  ),
+                                                );
+                                              } catch (e) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text('Failed to restore order'),
+                                                    backgroundColor: Colors.red[600],
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.blue[600],
+                                              foregroundColor: Colors.white,
+                                              elevation: 0,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              'Receive Applications',
+                                              style: TextStyle(fontSize: 13),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
-                              ],
-                            ),
+                              );
+                            },
                           );
                         },
                       );
@@ -1241,6 +1301,48 @@ class _CustomerProfileState extends ConsumerState<CustomerProfile>
     );
   }
 
+// Add this helper method to fetch service name and provider name
+  Future<Map<String, String>> _fetchNotificationData(String orderId, String? providerId) async {
+    try {
+      String serviceName = 'Unknown Service';
+      String providerName = 'Unknown Provider';
+
+      // Fetch service name from orders collection
+      final orderDoc = await FirebaseFirestore.instance
+          .collection('orders')
+          .doc(orderId)
+          .get();
+
+      if (orderDoc.exists) {
+        final orderData = orderDoc.data() as Map<String, dynamic>;
+        serviceName = orderData['service'] ?? 'Unknown Service';
+      }
+
+      // Fetch provider name from users collection
+      if (providerId != null && providerId.isNotEmpty) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(providerId)
+            .get();
+
+        if (userDoc.exists) {
+          final userData = userDoc.data() as Map<String, dynamic>;
+          providerName = userData['name'] ?? 'Unknown Provider';
+        }
+      }
+
+      return {
+        'serviceName': serviceName,
+        'providerName': providerName,
+      };
+    } catch (e) {
+      print('Error fetching notification data: $e');
+      return {
+        'serviceName': 'Error loading service',
+        'providerName': 'Error loading provider',
+      };
+    }
+  }
 // Helper method for date formatting (add this too)
   String _formatDate(dynamic timestamp) {
     if (timestamp == null) return 'Unknown';
